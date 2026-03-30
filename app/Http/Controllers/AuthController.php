@@ -9,6 +9,37 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+
+public function register(Request $request)
+{
+    // 1. Validate the input
+    $request->validate([
+        'name' => 'required|string|max:255',
+        'username' => 'required|string|unique:users,username|max:255',
+        'email' => 'required|string|email|unique:users,email|max:255',
+        'password' => 'required|string|min:8|confirmed', // looks for password_confirmation
+    ]);
+
+    // 2. Create the User record
+    // Laravel's Eloquent will handle the mass assignment if $fillable is set
+    $user = User::create([
+        'name' => $request->name,
+        'username' => $request->username,
+        'email' => $request->email,
+        'password' => Hash::make($request->password), // Always hash the password!
+    ]);
+
+    // 3. Issue the Sanctum token immediately
+    $token = $user->createToken($request->device_name)->plainTextToken;
+
+    return response()->json([
+        'user' => $user,
+        'access_token' => $token,
+        'token_type' => 'Bearer',
+    ], 201);
+}
+
+
     public function login(Request $request)
     {
         // 1. Validate the incoming request
@@ -29,29 +60,6 @@ class AuthController extends Controller
 
         // 4. Create the token and return the plain-text string
         // Sanctum hashes it before saving to 'personal_access_tokens'
-        $token = $user->createToken($request->device_name)->plainTextToken;
-
-        return response()->json([
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-        ]);
-    }
-
-    public function register(Request $request)
-    {
-        // 1. Validate the incoming request
-        $request->validate([
-            'username' => 'required|unique:users,username',
-            'password' => 'required|min:6',
-        ]);
-
-        // 2. Create the user
-        $user = User::create([
-            'username' => $request->username,
-            'password' => Hash::make($request->password),
-        ]);
-
-        // 3. Create the token and return it
         $token = $user->createToken($request->device_name)->plainTextToken;
 
         return response()->json([

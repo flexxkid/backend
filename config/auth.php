@@ -39,7 +39,7 @@ return [
 
     'guards' => [
         'web' => [
-            'driver' => 'sunctum',
+            'driver' => 'session',
             'provider' => 'users',
         ],
     ],
@@ -64,7 +64,7 @@ return [
     'providers' => [
         'users' => [
             'driver' => 'eloquent',
-            'model' => App\Models\UserAccount::class,
+            'model' => App\Models\User::class,
         ],
 
         // 'users' => [
