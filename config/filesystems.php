@@ -59,6 +59,15 @@ return [
             'throw' => false,
             'report' => false,
         ],
+         'b2' => [
+        'driver' => 's3',
+        'key' => env('B2_KEY'),
+        'secret' => env('B2_SECRET'),
+        'region' => env('B2_REGION'),
+        'bucket' => env('B2_BUCKET'),
+        'endpoint' => env('B2_ENDPOINT'),
+        'url' => env('B2_URL', 'https://f001.backblazeb2.com/file/' . env('B2_BUCKET')),
+    ],
 
     ],
 
