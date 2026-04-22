@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\ErdModel;
 
-class PayrollDeduction extends Model
+class PayrollDeduction extends ErdModel
 {
     protected $primaryKey = 'PayrollDeductionID';
     public $timestamps = false;

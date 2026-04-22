@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\ErdModel;
 
-class DeploymentHistory extends Model
+class DeploymentHistory extends ErdModel
 {
     protected $primaryKey = 'DeploymentID';
     public $timestamps = false;

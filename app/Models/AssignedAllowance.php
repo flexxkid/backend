@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\ErdModel;
 
-class AssignedAllowance extends Model
+class AssignedAllowance extends ErdModel
 {
     protected $primaryKey = 'AssignedAllowanceID';
     public $timestamps = false;

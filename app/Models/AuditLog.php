@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\ErdModel;
 
-class AuditLog extends Model
+class AuditLog extends ErdModel
 {
     protected $primaryKey = 'AuditID';
     public $timestamps = false;

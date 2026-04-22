@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\ErdModel;
 
-class Training extends Model
+class Training extends ErdModel
 {
     protected $primaryKey = 'TrainingID';
     public $timestamps = false;

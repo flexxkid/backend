@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
-use Illuminate\Foundation\Auth\User as Authenticatable;
+use App\Models\Concerns\ErdAuthenticatable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Notifications\Notifiable;
 
-class UserAccount extends Authenticatable
+class UserAccount extends ErdAuthenticatable
 {
     use HasApiTokens;
+    use Notifiable;
 
     protected $table = 'UserAccount';
     protected $primaryKey = 'UserID';

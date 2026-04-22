@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\ErdModel;
 
-class DocumentType extends Model
+class DocumentType extends ErdModel
 {
     protected $primaryKey = 'DocumentTypeID';
     public $timestamps = false;

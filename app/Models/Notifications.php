@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\ErdModel;
 
-class Notifications extends Model
+class Notifications extends ErdModel
 {
     protected $primaryKey = 'NotificationID';
     public $timestamps = false;

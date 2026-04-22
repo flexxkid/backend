@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\ErdModel;
 
-class LeaveRequest extends Model
+class LeaveRequest extends ErdModel
 {
     protected $table = 'LeaveRequest';
     protected $primaryKey = 'LeaveID';
@@ -18,6 +18,11 @@ class LeaveRequest extends Model
         'Reason',
         'LeaveStatus',
         'ApprovedBy',
+        'ApprovedAt',
+    ];
+
+    protected $casts = [
+        'ApprovedAt' => 'datetime',
     ];
 
     public function employee()

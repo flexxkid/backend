@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\ErdModel;
 
-class Permission extends Model
+class Permission extends ErdModel
 {
     protected $primaryKey = 'PermissionID';
     public $timestamps = false;

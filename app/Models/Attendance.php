@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\ErdModel;
 
-class Attendance extends Model
+class Attendance extends ErdModel
 {
     protected $primaryKey = 'AttendanceID';
     public $timestamps = false;
@@ -12,8 +12,8 @@ class Attendance extends Model
     protected $fillable = [
         'EmployeeID',
         'AttendanceDate',
-        'TimeIn',
-        'TimeOut',
+        'Time_In',
+        'Time_Out',
         'AttendanceStatus',
     ];
 

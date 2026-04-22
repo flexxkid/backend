@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\ErdModel;
 
-class LeaveBalance extends Model
+class LeaveBalance extends ErdModel
 {
     protected $primaryKey = 'LeaveBalanceID';
     public $timestamps = false;
@@ -14,10 +14,8 @@ class LeaveBalance extends Model
         'LeaveType',
         'TotalDays',
         'UsedDays',
+        'RemainingDays',
     ];
-
-    // RemainingDays is a GENERATED column — never set it directly
-    protected $guarded = ['RemainingDays'];
 
     public function employee()
     {

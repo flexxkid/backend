@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\ErdModel;
 
-class Branch extends Model
+class Branch extends ErdModel
 {
     protected $primaryKey = 'BranchID';
     public $timestamps = false;

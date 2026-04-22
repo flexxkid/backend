@@ -2,70 +2,123 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Models\UserAccount;
+use App\Services\AuditLogService;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
+    public function __construct(private readonly AuditLogService $auditLogService)
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'username' => 'required|string|max:255|unique:users',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8|confirmed',
+    }
+
+    public function register(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'EmployeeID' => ['nullable', 'integer', 'exists:Employee,EmployeeID'],
+            'RoleID' => ['nullable', 'integer', 'exists:Role,RoleID'],
+            'Username' => ['required', 'string', 'max:100', 'unique:UserAccount,Username'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'account_status' => ['nullable', 'string', 'max:50'],
         ]);
 
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 422);
-        }
-
-        $user = User::create([
-            'name' => $request->name,
-            'username' => $request->username,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
+        $user = UserAccount::create([
+            'EmployeeID' => $data['EmployeeID'] ?? null,
+            'Username' => $data['Username'],
+            'PasswordHash' => Hash::make($data['password']),
+            'RoleID' => $data['RoleID'] ?? null,
+            'AccountStatus' => $data['account_status'] ?? 'active',
         ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
+        $this->auditLogService->record(
+            'register',
+            $user->getTable(),
+            $user->getKey(),
+            null,
+            $user->toArray(),
+            $user,
+            $request->ip(),
+        );
+
         return response()->json([
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user,
+            'user' => $user->load(['employee', 'role']),
         ], 201);
     }
 
-    public function login(Request $request)
+    public function login(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|string|email',
-            'password' => 'required|string',
+        $credentials = $request->validate([
+            'Username' => ['required', 'string'],
+            'password' => ['required', 'string'],
         ]);
 
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 422);
-        }
+        $user = UserAccount::query()
+            ->where('Username', $credentials['Username'])
+            ->where('AccountStatus', 'active')
+            ->first();
 
-        $user = User::where('email', $request->email)->first();
-
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        if (! $user || ! Hash::check($credentials['password'], $user->PasswordHash)) {
             throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
+                'Username' => ['The provided credentials are incorrect.'],
             ]);
         }
 
+        $user->forceFill([
+            'LastLogin' => Carbon::now(),
+        ])->save();
+
         $token = $user->createToken('auth_token')->plainTextToken;
+
+        $this->auditLogService->record(
+            'login',
+            $user->getTable(),
+            $user->getKey(),
+            null,
+            ['LastLogin' => $user->LastLogin],
+            $user,
+            $request->ip(),
+        );
 
         return response()->json([
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user,
+            'user' => $user->load(['employee', 'role']),
+        ]);
+    }
+
+    public function me(Request $request): JsonResponse
+    {
+        return response()->json($request->user()?->load(['employee', 'role', 'notifications']));
+    }
+
+    public function logout(Request $request): JsonResponse
+    {
+        /** @var UserAccount $user */
+        $user = $request->user();
+        $user?->currentAccessToken()?->delete();
+
+        if ($user) {
+            $this->auditLogService->record(
+                'logout',
+                $user->getTable(),
+                $user->getKey(),
+                null,
+                null,
+                $user,
+                $request->ip(),
+            );
+        }
+
+        return response()->json([
+            'message' => 'Logged out successfully.',
         ]);
     }
 }

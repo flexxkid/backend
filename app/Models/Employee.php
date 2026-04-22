@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\ErdModel;
 
-class Employee extends Model
+class Employee extends ErdModel
 {
     protected $primaryKey = 'EmployeeID';
     public $timestamps = false;
@@ -13,7 +13,7 @@ class Employee extends Model
         'FullName',
         'DateOfBirth',
         'Email',
-        'Address',
+        'PostalAddress',
         'PhoneNumber',
         'Gender',
         'JobTitle',

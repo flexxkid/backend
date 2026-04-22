@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\ErdModel;
 
-class PerformanceEvaluation extends Model
+class PerformanceEvaluation extends ErdModel
 {
     protected $primaryKey = 'EvaluationID';
     public $timestamps = false;

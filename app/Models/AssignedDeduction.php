@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\ErdModel;
 
-class AssignedDeduction extends Model
+class AssignedDeduction extends ErdModel
 {
     protected $primaryKey = 'AssignedDeductionID';
     public $timestamps = false;

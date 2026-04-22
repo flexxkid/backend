@@ -2,55 +2,46 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AdditionalDocuments;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use App\Models\EmployeeDocument;
-use Illuminate\Support\Facades\Log;
 
 class UploadController extends Controller
 {
-    /**
-     * Upload an employee document to Backblaze B2.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function uploadDocument(Request $request)
+    public function uploadDocument(Request $request): JsonResponse
     {
-        try {
-            // Validate the request
-            $validated = $request->validate([
-                'employee_id' => 'required',
-                'document_type' => 'required|in:national_id,academic_certificate,good_conduct,employment_contract,security_licence',
-                'file' => 'required|file|max:10240', // Max 10MB
-                'expiry_date' => 'nullable|date',
-            ]);
+        $data = $request->validate([
+            'EmployeeID' => ['required', 'integer', 'exists:Employee,EmployeeID'],
+            'DocumentTypeID' => ['required', 'integer', 'exists:DocumentType,DocumentTypeID'],
+            'file' => ['required', 'file', 'max:10240'],
+            'Description' => ['nullable', 'string'],
+            'ExpiryDate' => ['nullable', 'date'],
+        ]);
 
-            // Get the file
-            $file = $request->file('file');
+        $file = $request->file('file');
+        $path = $file->storeAs(
+            'hrms-documents',
+            Str::uuid() . '.' . $file->getClientOriginalExtension(),
+            config('filesystems.default', 'local'),
+        );
 
-            // Generate a unique filename and path
-            $fileName = Str::random(40) . '.' . $file->getClientOriginalExtension();
-            $filePath = 'employee_documents/' . $fileName;
+        $document = AdditionalDocuments::create([
+            'EmployeeID' => $data['EmployeeID'],
+            'DocumentTypeID' => $data['DocumentTypeID'],
+            'Document' => $path,
+            'Description' => $data['Description'] ?? $file->getClientOriginalName(),
+            'ExpiryDate' => $data['ExpiryDate'] ?? null,
+            'UploadDate' => Carbon::now(),
+            'UploadedBy' => $request->user()?->EmployeeID,
+        ]);
 
-            // Upload to Backblaze B2
-            $uploaded = Storage::disk('b2')->put($filePath, file_get_contents($file));
-
-            if (!$uploaded) {
-                Log::error('Failed to upload file to Backblaze B2.', ['file' => $fileName]);
-                return response()->json(['error' => 'Failed to upload file.'], 500);
-            }
-
-            // Return success response
-            return response()->json([
-                'message' => 'Document uploaded successfully!',
-                'file' => $fileName,
-            ], 201);
-
-        } catch (\Exception $e) {
-            Log::error('Document upload failed: ' . $e->getMessage());
-            return response()->json(['error' => 'An error occurred during upload.'], 500);
-        }
+        return response()->json([
+            'message' => 'Document uploaded successfully.',
+            'document' => $document,
+            'url' => Storage::disk(config('filesystems.default', 'local'))->url($path),
+        ], 201);
     }
 }
