@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Allowances;
+use App\Models\Applicant;
 use App\Models\Branch;
 use App\Models\Deductions;
 use App\Models\Department;
@@ -103,6 +104,186 @@ class HrmsApiTest extends TestCase
             ->assertJsonPath('document.EmployeeID', $context['employee']->EmployeeID);
 
         Storage::disk('local')->assertExists($response->json('document.Document'));
+    }
+
+    public function test_employee_document_upload_stores_file_on_local_disk(): void
+    {
+        Storage::fake('local');
+
+        $context = $this->seedContext();
+
+        Sanctum::actingAs($context['user']);
+
+        $response = $this->post("/api/employees/{$context['employee']->EmployeeID}/documents", [
+            'DocumentTypeID' => $context['documentType']->DocumentTypeID,
+            'Description' => 'Contract copy',
+            'file' => UploadedFile::fake()->create('contract.pdf', 160, 'application/pdf'),
+        ], ['Accept' => 'application/json']);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('EmployeeID', $context['employee']->EmployeeID);
+
+        Storage::disk('local')->assertExists($response->json('Document'));
+    }
+
+    public function test_upload_document_endpoint_stores_file_on_b2_disk_when_configured(): void
+    {
+        Storage::fake('b2');
+        $this->configureB2Disk();
+
+        $context = $this->seedContext();
+
+        Sanctum::actingAs($context['user']);
+
+        $response = $this->post('/api/upload', [
+            'EmployeeID' => $context['employee']->EmployeeID,
+            'DocumentTypeID' => $context['documentType']->DocumentTypeID,
+            'Description' => 'Good conduct certificate',
+            'file' => UploadedFile::fake()->create('good-conduct.pdf', 120, 'application/pdf'),
+        ], ['Accept' => 'application/json']);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('document.EmployeeID', $context['employee']->EmployeeID);
+
+        Storage::disk('b2')->assertExists($response->json('document.Document'));
+    }
+
+    public function test_employee_document_upload_stores_file_on_b2_disk_when_configured(): void
+    {
+        Storage::fake('b2');
+        $this->configureB2Disk();
+
+        $context = $this->seedContext();
+
+        Sanctum::actingAs($context['user']);
+
+        $response = $this->post("/api/employees/{$context['employee']->EmployeeID}/documents", [
+            'DocumentTypeID' => $context['documentType']->DocumentTypeID,
+            'Description' => 'NHIF card',
+            'file' => UploadedFile::fake()->create('nhif-card.pdf', 80, 'application/pdf'),
+        ], ['Accept' => 'application/json']);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('EmployeeID', $context['employee']->EmployeeID);
+
+        Storage::disk('b2')->assertExists($response->json('Document'));
+    }
+
+    public function test_employee_and_applicant_fullname_are_built_from_first_and_last_name(): void
+    {
+        $context = $this->seedContext();
+
+        Sanctum::actingAs($context['user']);
+
+        $employee = $this->postJson('/api/employees', [
+            'FirstName' => 'Mary',
+            'LastName' => 'Recruit',
+            'DateOfBirth' => '1997-07-07',
+            'Email' => 'mary.recruit@example.com',
+            'PostalAddress' => 'P.O. Box 4',
+            'PhoneNumber' => '0755555555',
+            'Gender' => 'Female',
+            'JobTitle' => 'Accountant',
+            'NationalID' => 'EMP-301',
+            'HireDate' => '2026-04-20',
+            'EmploymentStatus' => 'Active',
+            'DepartmentID' => $context['department']->DepartmentID,
+            'SupervisorID' => $context['supervisor']->EmployeeID,
+            'BranchID' => $context['branch']->BranchID,
+        ])->assertCreated();
+
+        $employee->assertJsonPath('FullName', 'Mary Recruit');
+
+        $applicant = $this->postJson('/api/applicants', [
+            'FirstName' => 'Alice',
+            'LastName' => 'Applicant',
+            'DateOfBirth' => '1998-08-20',
+            'Email' => 'alice@applicant.test',
+            'Address' => 'P.O. Box 3',
+            'PhoneNumber' => '0744444444',
+            'Gender' => 'Female',
+            'LetterOfApplication' => 'letter.pdf',
+            'HighestLevelCertificate' => 'degree.pdf',
+            'CV' => 'cv.pdf',
+            'ApplicationStatus' => 'Pending',
+            'GoodConduct' => 'gc.pdf',
+            'NationalID' => 'APP-300',
+            'RecruitmentID' => $context['recruitment']->RecruitmentID,
+        ])->assertCreated();
+
+        $applicant->assertJsonPath('FullName', 'Alice Applicant');
+    }
+
+    public function test_recruitment_application_stores_uploaded_files_on_local_disk(): void
+    {
+        Storage::fake('local');
+
+        $context = $this->seedContext();
+
+        $response = $this->post("/api/recruitment/{$context['recruitment']->RecruitmentID}/apply", [
+            'FirstName' => 'Upload',
+            'LastName' => 'Applicant',
+            'Email' => 'upload.applicant@example.com',
+            'NationalID' => 'APP-UPLOAD-001',
+            'LetterOfApplication' => UploadedFile::fake()->create('letter.pdf', 80, 'application/pdf'),
+            'HighestLevelCertificate' => UploadedFile::fake()->create('certificate.pdf', 120, 'application/pdf'),
+            'CV' => UploadedFile::fake()->create('cv.pdf', 120, 'application/pdf'),
+            'GoodConduct' => UploadedFile::fake()->create('good-conduct.pdf', 120, 'application/pdf'),
+        ], ['Accept' => 'application/json']);
+
+        $response->assertCreated()
+            ->assertJsonPath('FullName', 'Upload Applicant')
+            ->assertJsonPath('RecruitmentID', $context['recruitment']->RecruitmentID);
+
+        $paths = Applicant::query()
+            ->where('NationalID', 'APP-UPLOAD-001')
+            ->firstOrFail([
+                'LetterOfApplication',
+                'HighestLevelCertificate',
+                'CV',
+                'GoodConduct',
+            ]);
+
+        Storage::disk('local')->assertExists($paths->LetterOfApplication);
+        Storage::disk('local')->assertExists($paths->HighestLevelCertificate);
+        Storage::disk('local')->assertExists($paths->CV);
+        Storage::disk('local')->assertExists($paths->GoodConduct);
+    }
+
+    public function test_recruitment_application_stores_uploaded_files_on_b2_when_configured(): void
+    {
+        Storage::fake('b2');
+        $this->configureB2Disk();
+
+        $context = $this->seedContext();
+
+        $this->post("/api/recruitment/{$context['recruitment']->RecruitmentID}/apply", [
+            'FirstName' => 'Cloud',
+            'LastName' => 'Applicant',
+            'Email' => 'cloud.applicant@example.com',
+            'NationalID' => 'APP-UPLOAD-002',
+            'LetterOfApplication' => UploadedFile::fake()->create('letter.pdf', 80, 'application/pdf'),
+            'HighestLevelCertificate' => UploadedFile::fake()->create('certificate.pdf', 120, 'application/pdf'),
+            'CV' => UploadedFile::fake()->create('cv.pdf', 120, 'application/pdf'),
+            'GoodConduct' => UploadedFile::fake()->create('good-conduct.pdf', 120, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertCreated();
+
+        $paths = Applicant::query()
+            ->where('NationalID', 'APP-UPLOAD-002')
+            ->firstOrFail([
+                'LetterOfApplication',
+                'HighestLevelCertificate',
+                'CV',
+                'GoodConduct',
+            ]);
+
+        Storage::disk('b2')->assertExists($paths->LetterOfApplication);
+        Storage::disk('b2')->assertExists($paths->HighestLevelCertificate);
+        Storage::disk('b2')->assertExists($paths->CV);
+        Storage::disk('b2')->assertExists($paths->GoodConduct);
     }
 
     public function test_leave_approval_updates_leave_balance(): void
@@ -609,5 +790,15 @@ class HrmsApiTest extends TestCase
         }
 
         $this->fail('No primary key was found in the API response.');
+    }
+
+    private function configureB2Disk(): void
+    {
+        config()->set('filesystems.default', 'b2');
+        config()->set('filesystems.disks.b2.key', 'key-id');
+        config()->set('filesystems.disks.b2.secret', 'app-key');
+        config()->set('filesystems.disks.b2.bucket', 'hrms-documents');
+        config()->set('filesystems.disks.b2.endpoint', 'https://s3.us-west-002.backblazeb2.com');
+        config()->set('filesystems.disks.b2.url', 'https://f000.backblazeb2.com/file/hrms-documents');
     }
 }

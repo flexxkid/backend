@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\AuditLogService;
+use App\Support\PersonName;
 use App\Support\HrmsEntityRegistry;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
@@ -139,6 +140,10 @@ class EntityController extends Controller
     {
         if ($entity === 'user-accounts' && array_key_exists('PasswordHash', $payload)) {
             $payload['PasswordHash'] = $this->hashPasswordIfNeeded($payload['PasswordHash']);
+        }
+
+        if (in_array($entity, ['applicants', 'employees'], true)) {
+            $payload = PersonName::normalizePayload($payload, $record === null);
         }
 
         if ($entity === 'leave-balances') {

@@ -5,12 +5,19 @@ namespace App\Http\Controllers;
 use App\Models\Applicant;
 use App\Models\Employee;
 use App\Models\Recruitment;
+use App\Services\DocumentStorageService;
+use App\Support\PersonName;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class RecruitmentController extends Controller
 {
+    public function __construct(private readonly DocumentStorageService $documentStorageService)
+    {
+    }
+
     public function index(Request $request): JsonResponse
     {
         return response()->json(
@@ -35,19 +42,31 @@ class RecruitmentController extends Controller
     public function apply(Request $request, int $recruitmentId): JsonResponse
     {
         $validated = $request->validate([
-            'FullName' => 'required|string|max:200',
+            'FullName' => 'nullable|string|max:200',
+            'FirstName' => 'required_without:FullName|string|max:100',
+            'LastName' => 'required_without:FullName|string|max:100',
             'DateOfBirth' => 'nullable|date',
             'Email' => 'nullable|email|max:150',
             'Address' => 'nullable|string|max:255',
             'PhoneNumber' => 'nullable|string|max:20',
             'Gender' => 'nullable|string|max:20',
-            'LetterOfApplication' => 'nullable|string|max:500',
-            'HighestLevelCertificate' => 'nullable|string|max:255',
-            'CV' => 'nullable|string|max:500',
+            'LetterOfApplication' => 'nullable',
+            'HighestLevelCertificate' => 'nullable',
+            'CV' => 'nullable',
             'ApplicationStatus' => 'nullable|string|max:50',
-            'GoodConduct' => 'nullable|string|max:500',
+            'GoodConduct' => 'nullable',
             'NationalID' => 'required|string|max:50|unique:Applicant,NationalID',
         ]);
+
+        $request->validate([
+            'LetterOfApplication' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
+            'HighestLevelCertificate' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
+            'CV' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
+            'GoodConduct' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
+        ]);
+
+        $validated = PersonName::normalizePayload($validated, true);
+        $validated = $this->storeApplicantFiles($request, $recruitmentId, $validated);
 
         $applicant = Applicant::create($validated + [
             'RecruitmentID' => $recruitmentId,
@@ -98,5 +117,32 @@ class RecruitmentController extends Controller
         });
 
         return response()->json($employee->load(['department', 'branch', 'supervisor']), 201);
+    }
+
+    private function storeApplicantFiles(Request $request, int $recruitmentId, array $validated): array
+    {
+        $applicationDirectory = 'recruitment/'.(int) $recruitmentId.'/applications/'.Str::uuid();
+
+        $fileFields = [
+            'LetterOfApplication' => 'letter-of-application',
+            'HighestLevelCertificate' => 'highest-level-certificate',
+            'CV' => 'cv',
+            'GoodConduct' => 'good-conduct',
+        ];
+
+        foreach ($fileFields as $field => $prefix) {
+            if (! $request->hasFile($field)) {
+                continue;
+            }
+
+            $file = $request->file($field);
+            $validated[$field] = $this->documentStorageService->store(
+                $file,
+                $applicationDirectory,
+                $prefix.'.'.$file->getClientOriginalExtension(),
+            );
+        }
+
+        return $validated;
     }
 }

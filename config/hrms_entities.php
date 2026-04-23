@@ -120,7 +120,9 @@ return [
     'applicants' => [
         'model' => Applicant::class,
         'rules' => [
-            'FullName' => ['required', 'string', 'max:200'],
+            'FullName' => ['nullable', 'string', 'max:200'],
+            'FirstName' => ['required_without:FullName', 'string', 'max:100'],
+            'LastName' => ['required_without:FullName', 'string', 'max:100'],
             'DateOfBirth' => ['nullable', 'date'],
             'Email' => ['nullable', 'email', 'max:150'],
             'Address' => ['nullable', 'string', 'max:255'],
@@ -139,7 +141,9 @@ return [
     'employees' => [
         'model' => Employee::class,
         'rules' => [
-            'FullName' => ['required', 'string', 'max:200'],
+            'FullName' => ['nullable', 'string', 'max:200'],
+            'FirstName' => ['required_without:FullName', 'string', 'max:100'],
+            'LastName' => ['required_without:FullName', 'string', 'max:100'],
             'DateOfBirth' => ['nullable', 'date'],
             'Email' => ['required', 'email', 'max:150', 'unique:Employee,Email,{id},EmployeeID'],
             'PostalAddress' => ['nullable', 'string', 'max:255'],

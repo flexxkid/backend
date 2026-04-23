@@ -36,6 +36,7 @@ class AttendanceController extends Controller
     public function update(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
+            'AttendanceDate' => 'sometimes|required|date',
             'Time_In' => 'sometimes|nullable|date_format:H:i:s',
             'Time_Out' => 'sometimes|nullable|date_format:H:i:s',
             'AttendanceStatus' => 'sometimes|required|in:Present,Absent,Late,Half-Day',

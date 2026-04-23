@@ -15,6 +15,8 @@ return [
 
     'default' => env('FILESYSTEM_DISK', 'local'),
 
+    'cloud' => env('FILESYSTEM_CLOUD', 'b2'),
+
     /*
     |--------------------------------------------------------------------------
     | Filesystem Disks
@@ -65,7 +67,7 @@ return [
             'secret' => env('B2_APP_KEY'),
             'region' => env('B2_REGION', 'us-west-002'),
             'bucket' => env('B2_BUCKET'),
-            'endpoint' => env('B2_ENDPOINT'),
+            'endpoint' => env('B2_ENDPOINT', 'https://s3.'.env('B2_REGION', 'us-west-002').'.backblazeb2.com'),
             'url' => env('B2_URL'),
             'use_path_style_endpoint' => true,
             'visibility' => 'private',

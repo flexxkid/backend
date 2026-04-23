@@ -3,14 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Models\AdditionalDocuments;
+use App\Services\DocumentStorageService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 class DocumentController extends Controller
 {
-    public function __construct(private readonly NotificationService $notificationService)
+    public function __construct(
+        private readonly NotificationService $notificationService,
+        private readonly DocumentStorageService $documentStorageService,
+    )
     {
     }
 
@@ -23,8 +26,10 @@ class DocumentController extends Controller
             'ExpiryDate' => 'nullable|date|after:today',
         ]);
 
-        $disk = config('filesystems.default') === 'b2' ? 'b2' : config('filesystems.default', 'local');
-        $path = $request->file('file')->store("employees/{$employeeId}/documents", $disk);
+        $path = $this->documentStorageService->store(
+            $request->file('file'),
+            "employees/{$employeeId}/documents",
+        );
 
         $document = AdditionalDocuments::create([
             'EmployeeID' => $employeeId,
@@ -51,14 +56,9 @@ class DocumentController extends Controller
     public function show(int $documentId): JsonResponse
     {
         $document = AdditionalDocuments::findOrFail($documentId);
-        $disk = config('filesystems.default') === 'b2' ? 'b2' : config('filesystems.default', 'local');
 
-        if ($disk === 'b2') {
-            $url = Storage::disk($disk)->temporaryUrl($document->Document, now()->addMinutes(5));
-        } else {
-            $url = Storage::disk($disk)->url($document->Document);
-        }
-
-        return response()->json(['url' => $url]);
+        return response()->json([
+            'url' => $this->documentStorageService->url($document->Document),
+        ]);
     }
 }

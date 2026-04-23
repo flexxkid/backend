@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\Employee\StoreEmployeeRequest;
 use App\Http\Requests\Employee\UpdateEmployeeRequest;
 use App\Models\Employee;
+use App\Support\PersonName;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -71,7 +72,7 @@ class EmployeeController extends Controller
 
     public function store(StoreEmployeeRequest $request): JsonResponse
     {
-        $employee = Employee::create($request->validated());
+        $employee = Employee::create(PersonName::normalizePayload($request->validated(), true));
 
         return response()->json($employee->load(['department', 'branch']), 201);
     }
@@ -99,7 +100,7 @@ class EmployeeController extends Controller
     public function update(UpdateEmployeeRequest $request, int $id): JsonResponse
     {
         $employee = Employee::findOrFail($id);
-        $employee->update($request->validated());
+        $employee->update(PersonName::normalizePayload($request->validated()));
 
         return response()->json($employee->load(['department', 'branch', 'supervisor']));
     }
