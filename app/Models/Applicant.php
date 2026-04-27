@@ -25,7 +25,6 @@ class Applicant extends ErdModel
         'RecruitmentID',
     ];
 
-    protected $hidden = ['CV', 'GoodConduct'];
 
     public function recruitment()
     {

@@ -14,29 +14,45 @@ use Illuminate\Support\Str;
 
 class RecruitmentController extends Controller
 {
-    public function __construct(private readonly DocumentStorageService $documentStorageService)
-    {
+    public function __construct(
+        private readonly DocumentStorageService $documentStorageService
+    ) {
     }
 
     public function index(Request $request): JsonResponse
     {
-        return response()->json(
-            Recruitment::with(['department', 'applicants'])->paginate($request->integer('per_page', 15))
-        );
+        $recruitments = Recruitment::with(['department', 'applicants'])
+            ->paginate($request->integer('per_page', 15));
+
+        return response()->json($recruitments);
     }
 
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'JobTitle' => 'required|string|max:150',
-            'DepartmentID' => 'required|exists:Department,DepartmentID',
-            'VacancyStatus' => 'required|string|max:50',
+            'DepartmentID' => 'nullable|exists:Department,DepartmentID',
+            'location' => 'required|string|max:100',
+            'category' => 'required|string|max:100',
+            'type' => 'required|string|max:100',
+            'salary' => 'required|numeric',
+            'description' => 'required|string|max:300',
+            'tags' => 'required|string|max:30',
+            'VacancyStatus' => 'nullable|string|max:50',
             'PostedDate' => 'nullable|date',
+            'Deadline' => 'required|date|after_or_equal:PostedDate',
         ]);
+
+        // Default values if not provided
+        $validated['VacancyStatus'] = $validated['VacancyStatus'] ?? 'Open';
+        $validated['PostedDate'] = $validated['PostedDate'] ?? now()->toDateString();
 
         $recruitment = Recruitment::create($validated);
 
-        return response()->json($recruitment->load('department'), 201);
+        return response()->json(
+            $recruitment->load('department'),
+            201
+        );
     }
 
     public function apply(Request $request, int $recruitmentId): JsonResponse
@@ -50,15 +66,10 @@ class RecruitmentController extends Controller
             'Address' => 'nullable|string|max:255',
             'PhoneNumber' => 'nullable|string|max:20',
             'Gender' => 'nullable|string|max:20',
-            'LetterOfApplication' => 'nullable',
-            'HighestLevelCertificate' => 'nullable',
-            'CV' => 'nullable',
-            'ApplicationStatus' => 'nullable|string|max:50',
-            'GoodConduct' => 'nullable',
             'NationalID' => 'required|string|max:50|unique:Applicant,NationalID',
-        ]);
 
-        $request->validate([
+            'ApplicationStatus' => 'nullable|string|max:50',
+
             'LetterOfApplication' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
             'HighestLevelCertificate' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
             'CV' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
@@ -66,14 +77,19 @@ class RecruitmentController extends Controller
         ]);
 
         $validated = PersonName::normalizePayload($validated, true);
+
         $validated = $this->storeApplicantFiles($request, $recruitmentId, $validated);
 
-        $applicant = Applicant::create($validated + [
+        $applicant = Applicant::create([
+            ...$validated,
             'RecruitmentID' => $recruitmentId,
             'ApplicationStatus' => $validated['ApplicationStatus'] ?? 'Submitted',
         ]);
 
-        return response()->json($applicant->load('recruitment'), 201);
+        return response()->json(
+            $applicant->load('recruitment'),
+            201
+        );
     }
 
     public function convertApplicant(Request $request, int $applicantId): JsonResponse
@@ -111,17 +127,26 @@ class RecruitmentController extends Controller
                 'BranchID' => $validated['BranchID'],
             ]);
 
-            $applicant->update(['ApplicationStatus' => 'Hired']);
+            $applicant->update([
+                'ApplicationStatus' => 'Hired'
+            ]);
 
             return $employee;
         });
 
-        return response()->json($employee->load(['department', 'branch', 'supervisor']), 201);
+        return response()->json(
+            $employee->load(['department', 'branch', 'supervisor']),
+            201
+        );
     }
 
-    private function storeApplicantFiles(Request $request, int $recruitmentId, array $validated): array
-    {
-        $applicationDirectory = 'recruitment/'.(int) $recruitmentId.'/applications/'.Str::uuid();
+    private function storeApplicantFiles(
+        Request $request,
+        int $recruitmentId,
+        array $validated
+    ): array {
+        $applicationDirectory = 'recruitment/' . $recruitmentId .
+            '/applications/' . Str::uuid();
 
         $fileFields = [
             'LetterOfApplication' => 'letter-of-application',
@@ -131,18 +156,44 @@ class RecruitmentController extends Controller
         ];
 
         foreach ($fileFields as $field => $prefix) {
-            if (! $request->hasFile($field)) {
+
+            // Only proceed if file exists
+            if (!$request->hasFile($field)) {
                 continue;
             }
 
             $file = $request->file($field);
+
+            // extra safety check (prevents broken uploads)
+            if (!$file->isValid()) {
+                logger()->warning("Invalid upload detected: {$field}");
+                continue;
+            }
+
             $validated[$field] = $this->documentStorageService->store(
                 $file,
                 $applicationDirectory,
-                $prefix.'.'.$file->getClientOriginalExtension(),
+                $prefix . '.' . $file->getClientOriginalExtension()
             );
         }
 
         return $validated;
+    }
+
+    public function viewApplications(Request $request, int $recruitmentId): JsonResponse
+    {
+        $applications = Applicant::where('RecruitmentID', $recruitmentId)
+            ->orderByDesc('created_at')
+            ->paginate($request->integer('per_page', 15));
+
+        return response()->json($applications);
+    }
+
+    public function viewApplication(int $applicantId): JsonResponse
+    {
+        $application = Applicant::with('recruitment')
+            ->findOrFail($applicantId);
+
+        return response()->json($application);
     }
 }

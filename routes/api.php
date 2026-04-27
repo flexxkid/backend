@@ -74,6 +74,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/recruitment', [RecruitmentController::class, 'store'])->middleware('role:HR Administrator');
     Route::post('/applicants/{applicantId}/convert', [RecruitmentController::class, 'convertApplicant'])->whereNumber('applicantId')->middleware('role:HR Administrator');
+    Route::get('/recruitments/{id}/applications', [RecruitmentController::class, 'viewApplications']);
+    Route::get('/applications/{id}', [RecruitmentController::class, 'viewApplication']);
 
     Route::get('/deployments', [DeploymentController::class, 'index'])->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor');
     Route::post('/deployments', [DeploymentController::class, 'store'])->middleware('role:HR Administrator,Branch Manager,HR Officer');
@@ -101,9 +103,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
             Route::get($uri, [EntityController::class, 'index'])->defaults('entity', $entity);
             Route::post($uri, [EntityController::class, 'store'])->defaults('entity', $entity);
-            Route::get($uri.'/{id}', [EntityController::class, 'show'])->whereNumber('id')->defaults('entity', $entity);
-            Route::match(['put', 'patch'], $uri.'/{id}', [EntityController::class, 'update'])->whereNumber('id')->defaults('entity', $entity);
-            Route::delete($uri.'/{id}', [EntityController::class, 'destroy'])->whereNumber('id')->defaults('entity', $entity);
+            Route::get($uri . '/{id}', [EntityController::class, 'show'])->whereNumber('id')->defaults('entity', $entity);
+            Route::match(['put', 'patch'], $uri . '/{id}', [EntityController::class, 'update'])->whereNumber('id')->defaults('entity', $entity);
+            Route::delete($uri . '/{id}', [EntityController::class, 'destroy'])->whereNumber('id')->defaults('entity', $entity);
         }
     });
 });
