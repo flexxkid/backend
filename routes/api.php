@@ -24,6 +24,9 @@ Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
 });
 
+// ═════════════════════════════════════════════════════════════════════════════
+// PUBLIC RECRUITMENT ROUTES (No Auth Required)
+// ═════════════════════════════════════════════════════════════════════════════
 Route::get('/recruitment', [RecruitmentController::class, 'index']);
 Route::post('/recruitment/{recruitmentId}/apply', [RecruitmentController::class, 'apply'])->whereNumber('recruitmentId');
 
@@ -72,10 +75,41 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/training/{employeeId}/enrol', [TrainingController::class, 'enrol'])->whereNumber('employeeId')->middleware('role:HR Administrator,HR Officer');
     Route::get('/training/outstanding', [TrainingController::class, 'outstanding'])->middleware('role:HR Administrator,HR Officer,Branch Manager');
 
-    Route::post('/recruitment', [RecruitmentController::class, 'store'])->middleware('role:HR Administrator');
-    Route::post('/applicants/{applicantId}/convert', [RecruitmentController::class, 'convertApplicant'])->whereNumber('applicantId')->middleware('role:HR Administrator');
-    Route::get('/recruitments/{id}/applications', [RecruitmentController::class, 'viewApplications']);
-    Route::get('/applications/{id}', [RecruitmentController::class, 'viewApplication']);
+    // ═════════════════════════════════════════════════════════════════════════════
+    // PROTECTED RECRUITMENT ROUTES (Auth + HR Administrator Role)
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    // Create job posting
+    Route::post('/recruitment', [RecruitmentController::class, 'store'])
+        ->middleware('role:HR Administrator');
+
+    // Update job posting (PUT or PATCH)
+    Route::match(['put', 'patch'], '/recruitment/{recruitmentId}', [RecruitmentController::class, 'update'])
+        ->whereNumber('recruitmentId')
+        ->middleware('role:HR Administrator');
+
+    // Delete job posting
+    Route::delete('/recruitment/{recruitmentId}', [RecruitmentController::class, 'destroy'])
+        ->whereNumber('recruitmentId')
+        ->middleware('role:HR Administrator');
+
+    // Update applicant status (Approve, Reject, etc)
+    Route::patch('/applicants/{applicantId}', [RecruitmentController::class, 'updateApplicantStatus'])
+        ->whereNumber('applicantId')
+        ->middleware('role:HR Administrator');
+
+    // Convert applicant to employee (HIRE)
+    Route::post('/applicants/{applicantId}/convert', [RecruitmentController::class, 'convertApplicant'])
+        ->whereNumber('applicantId')
+        ->middleware('role:HR Administrator');
+
+    // Get applications for a job posting
+    Route::get('/recruitments/{id}/applications', [RecruitmentController::class, 'viewApplications'])
+        ->whereNumber('id');
+
+    // Get single application
+    Route::get('/applications/{id}', [RecruitmentController::class, 'viewApplication'])
+        ->whereNumber('id');
 
     Route::get('/deployments', [DeploymentController::class, 'index'])->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor');
     Route::post('/deployments', [DeploymentController::class, 'store'])->middleware('role:HR Administrator,Branch Manager,HR Officer');

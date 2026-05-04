@@ -10,6 +10,7 @@ use App\Support\PersonName;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class RecruitmentController extends Controller
@@ -19,6 +20,11 @@ class RecruitmentController extends Controller
     ) {
     }
 
+    /**
+     * GET /api/recruitment
+     * Get all job postings with pagination
+     * Public endpoint
+     */
     public function index(Request $request): JsonResponse
     {
         $recruitments = Recruitment::with(['department', 'applicants'])
@@ -27,6 +33,11 @@ class RecruitmentController extends Controller
         return response()->json($recruitments);
     }
 
+    /**
+     * POST /api/recruitment
+     * Create new job posting
+     * Protected: auth:sanctum, role:HR Administrator
+     */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -35,7 +46,7 @@ class RecruitmentController extends Controller
             'location' => 'required|string|max:100',
             'category' => 'required|string|max:100',
             'type' => 'required|string|max:100',
-            'salary' => 'required|numeric',
+            'salary' => 'required|numeric|min:0',
             'description' => 'required|string|max:300',
             'tags' => 'required|string|max:30',
             'VacancyStatus' => 'nullable|string|max:50',
@@ -43,7 +54,7 @@ class RecruitmentController extends Controller
             'Deadline' => 'required|date|after_or_equal:PostedDate',
         ]);
 
-        // Default values if not provided
+        // Default values
         $validated['VacancyStatus'] = $validated['VacancyStatus'] ?? 'Open';
         $validated['PostedDate'] = $validated['PostedDate'] ?? now()->toDateString();
 
@@ -55,6 +66,56 @@ class RecruitmentController extends Controller
         );
     }
 
+    /**
+     * PUT/PATCH /api/recruitment/{recruitmentId}
+     * Update job posting
+     * Protected: auth:sanctum, role:HR Administrator
+     * NEW ENDPOINT - Required by frontend
+     */
+    public function update(Request $request, int $recruitmentId): JsonResponse
+    {
+        $recruitment = Recruitment::findOrFail($recruitmentId);
+
+        $validated = $request->validate([
+            'JobTitle' => 'sometimes|required|string|max:150',
+            'DepartmentID' => 'nullable|exists:Department,DepartmentID',
+            'location' => 'sometimes|required|string|max:100',
+            'category' => 'sometimes|required|string|max:100',
+            'type' => 'sometimes|required|string|max:100',
+            'salary' => 'sometimes|required|numeric|min:0',
+            'description' => 'sometimes|required|string|max:300',
+            'tags' => 'sometimes|required|string|max:30',
+            'VacancyStatus' => 'sometimes|required|string|in:Open,Closed',
+            'Deadline' => 'sometimes|required|date',
+        ]);
+
+        $recruitment->update($validated);
+
+        return response()->json(
+            $recruitment->load('department'),
+            200
+        );
+    }
+
+    /**
+     * DELETE /api/recruitment/{recruitmentId}
+     * Delete job posting
+     * Protected: auth:sanctum, role:HR Administrator
+     * NEW ENDPOINT - Required by frontend
+     */
+    public function destroy(int $recruitmentId): JsonResponse
+    {
+        $recruitment = Recruitment::findOrFail($recruitmentId);
+        $recruitment->delete();
+
+        return response()->json(['message' => 'Recruitment posting deleted successfully'], 200);
+    }
+
+    /**
+     * POST /api/recruitment/{recruitmentId}/apply
+     * Apply for a job posting
+     * Public endpoint
+     */
     public function apply(Request $request, int $recruitmentId): JsonResponse
     {
         $validated = $request->validate([
@@ -67,9 +128,7 @@ class RecruitmentController extends Controller
             'PhoneNumber' => 'nullable|string|max:20',
             'Gender' => 'nullable|string|max:20',
             'NationalID' => 'required|string|max:50|unique:Applicant,NationalID',
-
             'ApplicationStatus' => 'nullable|string|max:50',
-
             'LetterOfApplication' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
             'HighestLevelCertificate' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
             'CV' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
@@ -77,7 +136,6 @@ class RecruitmentController extends Controller
         ]);
 
         $validated = PersonName::normalizePayload($validated, true);
-
         $validated = $this->storeApplicantFiles($request, $recruitmentId, $validated);
 
         $applicant = Applicant::create([
@@ -92,6 +150,58 @@ class RecruitmentController extends Controller
         );
     }
 
+    /**
+     * GET /api/recruitments/{recruitmentId}/applications
+     * Get all applications for a posting
+     * Protected endpoint
+     */
+    public function viewApplications(Request $request, int $recruitmentId): JsonResponse
+    {
+        $applications = Applicant::where('RecruitmentID', $recruitmentId)
+            ->orderByDesc('created_at')
+            ->paginate($request->integer('per_page', 15));
+
+        return response()->json($applications);
+    }
+
+    /**
+     * GET /api/applications/{applicantId}
+     * Get single application
+     * Protected endpoint
+     */
+    public function viewApplication(int $applicantId): JsonResponse
+    {
+        $application = Applicant::with('recruitment')
+            ->findOrFail($applicantId);
+
+        return response()->json($application);
+    }
+
+    /**
+     * PATCH /api/applicants/{applicantId}
+     * Update applicant status (Approved, Rejected, etc)
+     * Protected: auth:sanctum, role:HR Administrator
+     */
+    public function updateApplicantStatus(Request $request, int $applicantId): JsonResponse
+    {
+        $validated = $request->validate([
+            'ApplicationStatus' => 'required|string|in:Submitted,Approved,Rejected,Shortlisted,Hired',
+        ]);
+
+        $applicant = Applicant::findOrFail($applicantId);
+        $applicant->update($validated);
+
+        return response()->json(
+            $applicant->load('recruitment'),
+            200
+        );
+    }
+
+    /**
+     * POST /api/applicants/{applicantId}/convert
+     * Convert applicant to employee (HIRE)
+     * Protected: auth:sanctum, role:HR Administrator
+     */
     public function convertApplicant(Request $request, int $applicantId): JsonResponse
     {
         $validated = $request->validate([
@@ -106,6 +216,7 @@ class RecruitmentController extends Controller
         $employee = DB::transaction(function () use ($applicantId, $validated) {
             $applicant = Applicant::findOrFail($applicantId);
 
+            // Create employee from applicant data
             $employee = Employee::create([
                 'FullName' => $applicant->FullName,
                 'DateOfBirth' => $applicant->DateOfBirth,
@@ -127,6 +238,7 @@ class RecruitmentController extends Controller
                 'BranchID' => $validated['BranchID'],
             ]);
 
+            // Update applicant status to Hired
             $applicant->update([
                 'ApplicationStatus' => 'Hired'
             ]);
@@ -140,6 +252,10 @@ class RecruitmentController extends Controller
         );
     }
 
+    /**
+     * Helper: Store applicant files in B2 storage
+     * Returns storage path that can be used with download endpoint
+     */
     private function storeApplicantFiles(
         Request $request,
         int $recruitmentId,
@@ -156,44 +272,29 @@ class RecruitmentController extends Controller
         ];
 
         foreach ($fileFields as $field => $prefix) {
-
-            // Only proceed if file exists
             if (!$request->hasFile($field)) {
                 continue;
             }
 
             $file = $request->file($field);
 
-            // extra safety check (prevents broken uploads)
             if (!$file->isValid()) {
                 logger()->warning("Invalid upload detected: {$field}");
                 continue;
             }
 
-            $validated[$field] = $this->documentStorageService->store(
+            // Store and get the path
+            $storedPath = $this->documentStorageService->store(
                 $file,
                 $applicationDirectory,
                 $prefix . '.' . $file->getClientOriginalExtension()
             );
+
+            // If it's a B2 URL, store it as-is
+            // If it's a local path, store it as-is for download endpoint
+            $validated[$field] = $storedPath;
         }
 
         return $validated;
-    }
-
-    public function viewApplications(Request $request, int $recruitmentId): JsonResponse
-    {
-        $applications = Applicant::where('RecruitmentID', $recruitmentId)
-            ->orderByDesc('created_at')
-            ->paginate($request->integer('per_page', 15));
-
-        return response()->json($applications);
-    }
-
-    public function viewApplication(int $applicantId): JsonResponse
-    {
-        $application = Applicant::with('recruitment')
-            ->findOrFail($applicantId);
-
-        return response()->json($application);
     }
 }
