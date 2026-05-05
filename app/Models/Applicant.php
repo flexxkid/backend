@@ -7,7 +7,7 @@ use App\Models\Concerns\ErdModel;
 class Applicant extends ErdModel
 {
     protected $primaryKey = 'ApplicationID';
-    public $timestamps = false;
+    public $timestamps = true;
 
     protected $fillable = [
         'FullName',

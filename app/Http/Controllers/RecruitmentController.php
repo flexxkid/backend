@@ -11,7 +11,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class RecruitmentController extends Controller
 {
@@ -29,6 +31,10 @@ class RecruitmentController extends Controller
     {
         $recruitments = Recruitment::with(['department', 'applicants'])
             ->paginate($request->integer('per_page', 15));
+
+        $recruitments->getCollection()->transform(
+            fn (Recruitment $recruitment) => $this->appendApplicantDocumentUrlsToRecruitment($recruitment)
+        );
 
         return response()->json($recruitments);
     }
@@ -145,7 +151,9 @@ class RecruitmentController extends Controller
         ]);
 
         return response()->json(
-            $applicant->load('recruitment'),
+            $this->appendApplicantDocumentUrls(
+                $applicant->load('recruitment')
+            ),
             201
         );
     }
@@ -161,6 +169,10 @@ class RecruitmentController extends Controller
             ->orderByDesc('created_at')
             ->paginate($request->integer('per_page', 15));
 
+        $applications->getCollection()->transform(
+            fn (Applicant $applicant) => $this->appendApplicantDocumentUrls($applicant)
+        );
+
         return response()->json($applications);
     }
 
@@ -174,7 +186,34 @@ class RecruitmentController extends Controller
         $application = Applicant::with('recruitment')
             ->findOrFail($applicantId);
 
-        return response()->json($application);
+        return response()->json(
+            $this->appendApplicantDocumentUrls($application)
+        );
+    }
+
+    public function showApplicantDocument(Request $request, int $applicantId, string $field): BinaryFileResponse
+    {
+        abort_unless(
+            in_array($field, ['LetterOfApplication', 'HighestLevelCertificate', 'CV', 'GoodConduct'], true),
+            404
+        );
+
+        $applicant = Applicant::findOrFail($applicantId);
+        $path = $applicant->{$field};
+
+        abort_unless(filled($path), 404);
+
+        $disk = Storage::disk($this->documentStorageService->disk());
+        $absolutePath = $disk->path($path);
+
+        abort_unless(is_file($absolutePath), 404);
+
+        return response()->file(
+            $absolutePath,
+            [
+                'Content-Disposition' => 'inline; filename="' . basename($path) . '"',
+            ]
+        );
     }
 
     /**
@@ -192,7 +231,9 @@ class RecruitmentController extends Controller
         $applicant->update($validated);
 
         return response()->json(
-            $applicant->load('recruitment'),
+            $this->appendApplicantDocumentUrls(
+                $applicant->load('recruitment')
+            ),
             200
         );
     }
@@ -296,5 +337,64 @@ class RecruitmentController extends Controller
         }
 
         return $validated;
+    }
+
+    private function appendApplicantDocumentUrls(Applicant $applicant): Applicant
+    {
+        foreach ([
+            'LetterOfApplication',
+            'HighestLevelCertificate',
+            'CV',
+            'GoodConduct',
+        ] as $field) {
+            $applicant->setAttribute(
+                $field . 'Url',
+                $this->applicantDocumentUrl($applicant, $field)
+            );
+        }
+
+        return $applicant;
+    }
+
+    private function appendApplicantDocumentUrlsToRecruitment(Recruitment $recruitment): Recruitment
+    {
+        if ($recruitment->relationLoaded('applicants')) {
+            $recruitment->setRelation(
+                'applicants',
+                $recruitment->applicants->map(
+                    fn (Applicant $applicant) => $this->appendApplicantDocumentUrls($applicant)
+                )
+            );
+        }
+
+        return $recruitment;
+    }
+
+    private function applicantDocumentUrl(Applicant $applicant, string $field): ?string
+    {
+        $path = $applicant->{$field};
+
+        if (! filled($path)) {
+            return null;
+        }
+
+        $disk = Storage::disk($this->documentStorageService->disk());
+
+        if (! $disk->exists($path)) {
+            return null;
+        }
+
+        if ($this->documentStorageService->disk() !== 'local') {
+            return $this->documentStorageService->url($path);
+        }
+
+        return URL::temporarySignedRoute(
+            'applicants.documents.show',
+            now()->addMinutes(5),
+            [
+                'applicantId' => $applicant->ApplicationID,
+                'field' => $field,
+            ]
+        );
     }
 }

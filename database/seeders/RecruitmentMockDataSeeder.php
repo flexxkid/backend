@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Recruitment;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -35,8 +36,15 @@ class RecruitmentMockDataSeeder extends Seeder
         $recruitment = Recruitment::firstOrCreate(
             ['JobTitle' => 'Security Guard Mock Role', 'DepartmentID' => $department->DepartmentID],
             [
+                'location' => 'Nairobi, Kenya',
+                'category' => 'Operations',
+                'type' => 'Full-Time',
+                'salary' => 32000,
+                'description' => 'Seeded recruitment role for frontend and API upload testing.',
+                'tags' => 'OPS,SEED',
                 'VacancyStatus' => 'Open',
                 'PostedDate' => now()->toDateString(),
+                'Deadline' => now()->addDays(21)->toDateString(),
             ],
         );
 
@@ -49,7 +57,7 @@ class RecruitmentMockDataSeeder extends Seeder
             'GoodConduct' => $this->storeMockFile($directory, 'good-conduct.pdf', $this->pdfStub('Certificate of Good Conduct')),
         ];
 
-        Applicant::updateOrCreate(
+        DB::table('Applicant')->updateOrInsert(
             ['NationalID' => 'MOCK-APPLICANT-001'],
             [
                 'FullName' => 'Mock Applicant',
@@ -64,6 +72,8 @@ class RecruitmentMockDataSeeder extends Seeder
                 'ApplicationStatus' => 'Submitted',
                 'GoodConduct' => $files['GoodConduct'],
                 'RecruitmentID' => $recruitment->RecruitmentID,
+                'created_at' => now(),
+                'updated_at' => now(),
             ],
         );
     }

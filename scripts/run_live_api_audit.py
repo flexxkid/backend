@@ -276,8 +276,15 @@ def main() -> None:
         json_body={
             "JobTitle": f"API Audit Guard {RUN_ID}",
             "DepartmentID": department_id,
+            "location": "Nairobi, Kenya",
+            "category": "Operations",
+            "type": "Full-Time",
+            "salary": 32000,
+            "description": "Live audit role created to validate frontend recruitment flows.",
+            "tags": "OPS,API",
             "VacancyStatus": "Open",
             "PostedDate": "2026-04-23",
+            "Deadline": "2026-05-31",
         },
         expect_json=True,
     )
