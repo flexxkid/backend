@@ -12,14 +12,14 @@ class UserAccountController extends Controller
     public function index(Request $request): JsonResponse
     {
         return response()->json(
-            UserAccount::with(['role', 'employee'])->paginate($request->integer('per_page', 15))
+            UserAccount::with(['role.permissions', 'employee'])->paginate($request->integer('per_page', 15))
         );
     }
 
     public function show(int $id): JsonResponse
     {
         return response()->json(
-            UserAccount::with(['role', 'employee'])->findOrFail($id)
+            UserAccount::with(['role.permissions', 'employee'])->findOrFail($id)
         );
     }
 
@@ -45,7 +45,7 @@ class UserAccountController extends Controller
             'AccountStatus' => 'active',
         ]);
 
-        return response()->json($account->load(['role', 'employee']), 201);
+        return response()->json($account->load(['role.permissions', 'employee']), 201);
     }
 
     public function update(Request $request, int $id): JsonResponse
@@ -69,7 +69,7 @@ class UserAccountController extends Controller
 
         $account->update($validated);
 
-        return response()->json($account->load(['role', 'employee']));
+        return response()->json($account->load(['role.permissions', 'employee']));
     }
 
     public function resetPassword(Request $request, int $id): JsonResponse
@@ -89,7 +89,7 @@ class UserAccountController extends Controller
         $account = UserAccount::findOrFail($id);
         $account->update(['AccountStatus' => 'active']);
 
-        return response()->json($account->load(['role', 'employee']));
+        return response()->json($account->load(['role.permissions', 'employee']));
     }
 
     public function deactivate(int $id): JsonResponse

@@ -17,6 +17,20 @@ class TrainingController extends Controller
         );
     }
 
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'TrainingName' => 'required|string|max:200',
+            'TrainingType' => 'nullable|string|max:100',
+            'StartDate' => 'nullable|date',
+            'EndDate' => 'nullable|date|after_or_equal:StartDate',
+        ]);
+
+        $training = Training::create($validated);
+
+        return response()->json($training->load('employees'), 201);
+    }
+
     public function enrol(Request $request, int $employeeId): JsonResponse
     {
         $request->validate([
@@ -38,6 +52,15 @@ class TrainingController extends Controller
         }
 
         return response()->json($employee->load('trainings'));
+    }
+
+    public function destroy(int $id): JsonResponse
+    {
+        $training = Training::findOrFail($id);
+        $training->employees()->detach();
+        $training->delete();
+
+        return response()->json(['message' => 'Training deleted successfully.']);
     }
 
     public function outstanding(): JsonResponse

@@ -5,12 +5,15 @@ namespace App\Http\Controllers;
 use App\Services\AuditLogService;
 use App\Support\PersonName;
 use App\Support\HrmsEntityRegistry;
+use App\Models\AuditLog;
+use App\Models\UserAccount;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Facades\Hash;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EntityController extends Controller
 {
@@ -23,6 +26,12 @@ class EntityController extends Controller
         $model = HrmsEntityRegistry::model($entity);
         $query = $model->newQuery();
 
+        if ($entity === 'audit-logs') {
+            $query->with('userAccount.employee');
+        }
+
+        $this->applyEntityFilters($query, $request, $entity);
+
         $includes = $this->requestedIncludes($request, $entity);
 
         if ($includes !== []) {
@@ -30,6 +39,34 @@ class EntityController extends Controller
         }
 
         return response()->json($query->paginate((int) $request->integer('per_page', 15)));
+    }
+
+    public function exportAuditLogs(Request $request): StreamedResponse
+    {
+        $query = AuditLog::query()->with('userAccount.employee');
+        $this->applyEntityFilters($query, $request, 'audit-logs');
+
+        $filename = 'audit-logs-'.now()->format('Ymd-His').'.csv';
+
+        return response()->streamDownload(function () use ($query) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['AuditID', 'Action', 'AffectedTable', 'AffectedRecordID', 'Username', 'FullName', 'IPAddress', 'CreatedAt']);
+
+            foreach ($query->cursor() as $log) {
+                fputcsv($handle, [
+                    $log->AuditID,
+                    $log->Action,
+                    $log->AffectedTable,
+                    $log->AffectedRecordID,
+                    $log->Username,
+                    $log->user['FullName'] ?? null,
+                    $log->IPAddress,
+                    $log->CreatedAt,
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 
     public function store(Request $request, string $entity): JsonResponse
@@ -171,5 +208,48 @@ class EntityController extends Controller
     private function hashPasswordIfNeeded(string $password): string
     {
         return str_starts_with($password, '$2y$') ? $password : Hash::make($password);
+    }
+
+    private function applyEntityFilters($query, Request $request, string $entity): void
+    {
+        if ($entity !== 'audit-logs') {
+            return;
+        }
+
+        $query
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $search = strtolower((string) $request->string('search'));
+                $query->where(function ($nested) use ($search) {
+                    $nested
+                        ->whereRaw('LOWER(Username) LIKE ?', ["%{$search}%"])
+                        ->orWhereRaw('LOWER(Action) LIKE ?', ["%{$search}%"])
+                        ->orWhereRaw('LOWER(AffectedTable) LIKE ?', ["%{$search}%"])
+                        ->orWhereRaw('LOWER(IPAddress) LIKE ?', ["%{$search}%"]);
+                });
+            })
+            ->when($request->filled('Action'), fn ($query) => $query->where('Action', strtolower($request->string('Action')->toString())))
+            ->when($request->filled('TableName'), function ($query) use ($request) {
+                $table = strtolower($request->string('TableName')->toString());
+                $query->whereRaw('LOWER(AffectedTable) LIKE ?', ["%{$table}%"]);
+            })
+            ->when($request->filled('UserID'), function ($query) use ($request) {
+                $userFilter = $request->integer('UserID');
+                $userIds = UserAccount::query()
+                    ->where('UserID', $userFilter)
+                    ->orWhere('EmployeeID', $userFilter)
+                    ->pluck('UserID')
+                    ->all();
+
+                if ($userIds === []) {
+                    $query->where('UserID', $userFilter);
+
+                    return;
+                }
+
+                $query->whereIn('UserID', $userIds);
+            })
+            ->when($request->filled('from_date'), fn ($query) => $query->whereDate('CreatedAt', '>=', $request->string('from_date')->toString()))
+            ->when($request->filled('to_date'), fn ($query) => $query->whereDate('CreatedAt', '<=', $request->string('to_date')->toString()))
+            ->orderByDesc('CreatedAt');
     }
 }

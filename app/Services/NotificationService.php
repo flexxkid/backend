@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\Employee;
 use App\Models\Notifications;
 use App\Models\UserAccount;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Mail;
 
 class NotificationService
 {
@@ -35,5 +37,18 @@ class NotificationService
             ->where('AccountStatus', 'active')
             ->get()
             ->each(fn (UserAccount $user) => $this->create($user->UserID, $title, $message, $type, $referenceTable, $referenceId));
+    }
+
+    public function sendEmailToEmployee(?Employee $employee, string $subject, string $message): void
+    {
+        $email = $employee?->Email;
+
+        if (! $email) {
+            return;
+        }
+
+        Mail::raw($message, function ($mail) use ($email, $subject) {
+            $mail->to($email)->subject($subject);
+        });
     }
 }

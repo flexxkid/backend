@@ -286,6 +286,133 @@ class HrmsApiTest extends TestCase
         Storage::disk('b2')->assertExists($paths->GoodConduct);
     }
 
+    public function test_recruitment_application_response_includes_signed_document_urls_for_local_files(): void
+    {
+        Storage::fake('local');
+
+        $context = $this->seedContext();
+
+        $response = $this->post("/api/recruitment/{$context['recruitment']->RecruitmentID}/apply", [
+            'FirstName' => 'Visible',
+            'LastName' => 'Applicant',
+            'Email' => 'visible.applicant@example.com',
+            'NationalID' => 'APP-VISIBLE-001',
+            'LetterOfApplication' => UploadedFile::fake()->create('letter.pdf', 80, 'application/pdf'),
+            'HighestLevelCertificate' => UploadedFile::fake()->create('certificate.pdf', 120, 'application/pdf'),
+            'CV' => UploadedFile::fake()->create('cv.pdf', 120, 'application/pdf'),
+            'GoodConduct' => UploadedFile::fake()->create('good-conduct.pdf', 120, 'application/pdf'),
+        ], ['Accept' => 'application/json']);
+
+        $response->assertCreated();
+
+        $payload = $response->json();
+
+        $this->assertIsString($payload['LetterOfApplicationUrl']);
+        $this->assertIsString($payload['HighestLevelCertificateUrl']);
+        $this->assertIsString($payload['CVUrl']);
+        $this->assertIsString($payload['GoodConductUrl']);
+        $this->assertStringContainsString('/applicants/', $payload['LetterOfApplicationUrl']);
+        $this->assertStringContainsString('/applicants/', $payload['HighestLevelCertificateUrl']);
+        $this->assertStringContainsString('/applicants/', $payload['CVUrl']);
+        $this->assertStringContainsString('/applicants/', $payload['GoodConductUrl']);
+    }
+
+    public function test_employee_show_includes_signed_application_document_urls_for_local_files(): void
+    {
+        Storage::fake('local');
+
+        $context = $this->seedContext();
+
+        $letterPath = Storage::disk('local')->putFile(
+            'employees/application-documents',
+            UploadedFile::fake()->create('letter.pdf', 80, 'application/pdf')
+        );
+        $certificatePath = Storage::disk('local')->putFile(
+            'employees/application-documents',
+            UploadedFile::fake()->create('certificate.pdf', 120, 'application/pdf')
+        );
+        $cvPath = Storage::disk('local')->putFile(
+            'employees/application-documents',
+            UploadedFile::fake()->create('cv.pdf', 120, 'application/pdf')
+        );
+        $goodConductPath = Storage::disk('local')->putFile(
+            'employees/application-documents',
+            UploadedFile::fake()->create('good-conduct.pdf', 120, 'application/pdf')
+        );
+
+        $context['employee']->update([
+            'LetterOfApplication' => $letterPath,
+            'HighestLevelCertificate' => $certificatePath,
+            'CV' => $cvPath,
+            'GoodConduct' => $goodConductPath,
+        ]);
+
+        Sanctum::actingAs($context['user']);
+
+        $response = $this->getJson("/api/employees/{$context['employee']->EmployeeID}");
+
+        $response->assertOk();
+
+        $payload = $response->json();
+
+        $this->assertIsString($payload['LetterOfApplicationUrl']);
+        $this->assertIsString($payload['HighestLevelCertificateUrl']);
+        $this->assertIsString($payload['CVUrl']);
+        $this->assertIsString($payload['GoodConductUrl']);
+        $this->assertStringContainsString('/employees/', $payload['LetterOfApplicationUrl']);
+        $this->assertStringContainsString('/employees/', $payload['HighestLevelCertificateUrl']);
+        $this->assertStringContainsString('/employees/', $payload['CVUrl']);
+        $this->assertStringContainsString('/employees/', $payload['GoodConductUrl']);
+    }
+
+    public function test_employee_application_document_download_url_endpoint_returns_signed_url(): void
+    {
+        Storage::fake('local');
+
+        $context = $this->seedContext();
+
+        $letterPath = Storage::disk('local')->putFile(
+            'employees/application-documents',
+            UploadedFile::fake()->create('letter.pdf', 80, 'application/pdf')
+        );
+
+        $context['employee']->update([
+            'LetterOfApplication' => $letterPath,
+        ]);
+
+        Sanctum::actingAs($context['user']);
+
+        $response = $this->getJson("/api/employees/{$context['employee']->EmployeeID}/documents/LetterOfApplication/download-url");
+
+        $response->assertOk();
+        $this->assertIsString($response->json('url'));
+        $this->assertStringContainsString('/employees/', $response->json('url'));
+    }
+
+    public function test_applicant_document_download_url_endpoint_returns_signed_url(): void
+    {
+        Storage::fake('local');
+
+        $context = $this->seedContext();
+
+        $this->post("/api/recruitment/{$context['recruitment']->RecruitmentID}/apply", [
+            'FirstName' => 'Clickable',
+            'LastName' => 'Applicant',
+            'Email' => 'clickable.applicant@example.com',
+            'NationalID' => 'APP-CLICK-001',
+            'LetterOfApplication' => UploadedFile::fake()->create('letter.pdf', 80, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertCreated();
+
+        Sanctum::actingAs($context['user']);
+
+        $applicant = Applicant::query()->where('NationalID', 'APP-CLICK-001')->firstOrFail();
+        $response = $this->getJson("/api/applicants/{$applicant->ApplicationID}/documents/LetterOfApplication/download-url");
+
+        $response->assertOk();
+        $this->assertIsString($response->json('url'));
+        $this->assertStringContainsString('/applicants/', $response->json('url'));
+    }
+
     public function test_leave_approval_updates_leave_balance(): void
     {
         $context = $this->seedContext();

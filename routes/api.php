@@ -33,19 +33,26 @@ Route::post('/recruitment/{recruitmentId}/apply', [RecruitmentController::class,
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
+    Route::match(['put', 'patch'], '/profile', [AuthController::class, 'updateProfile']);
+    Route::post('/profile/password', [AuthController::class, 'changePassword']);
 
     Route::get('/employees', [EmployeeController::class, 'index'])->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor');
     Route::post('/employees', [EmployeeController::class, 'store'])->middleware('role:HR Administrator,HR Officer');
-    Route::get('/employees/{id}', [EmployeeController::class, 'show'])->whereNumber('id')->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor');
+    Route::get('/employees/{id}', [EmployeeController::class, 'show'])->whereNumber('id')->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor,Employee');
+    Route::get('/employees/{employeeId}/documents/{field}/download-url', [EmployeeController::class, 'applicationDocumentUrl'])
+        ->whereNumber('employeeId')
+        ->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor,Employee');
     Route::match(['put', 'patch'], '/employees/{id}', [EmployeeController::class, 'update'])->whereNumber('id')->middleware('role:HR Administrator,HR Officer');
     Route::delete('/employees/{id}', [EmployeeController::class, 'destroy'])->whereNumber('id')->middleware('role:HR Administrator');
 
     Route::post('/employees/{employeeId}/documents', [DocumentController::class, 'store'])->whereNumber('employeeId')->middleware('role:HR Administrator,HR Officer');
-    Route::get('/documents/{documentId}/download', [DocumentController::class, 'show'])->whereNumber('documentId')->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor');
+    Route::get('/documents/{documentId}/download', [DocumentController::class, 'show'])->whereNumber('documentId')->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor,Employee');
     Route::post('/upload', [UploadController::class, 'uploadDocument'])->middleware('role:HR Administrator,HR Officer');
 
-    Route::get('/leave', [LeaveController::class, 'index'])->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor');
-    Route::post('/leave', [LeaveController::class, 'store'])->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor');
+    Route::get('/leave', [LeaveController::class, 'index'])->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor,Employee');
+    Route::get('/leave-balances', [LeaveController::class, 'balances'])->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor,Employee');
+    Route::post('/leave', [LeaveController::class, 'store'])->middleware('role:HR Administrator,Branch Manager,HR Officer,Employee');
+    Route::post('/leave-balances/allocate', [LeaveController::class, 'allocateBalances'])->middleware('role:HR Administrator,Branch Manager,HR Officer');
     Route::patch('/leave/{id}/approve', [LeaveController::class, 'approve'])->whereNumber('id')->middleware('role:HR Administrator,Branch Manager');
 
     Route::get('/attendance', [AttendanceController::class, 'index'])->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor');
@@ -55,6 +62,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/payroll', [PayrollController::class, 'index'])->middleware('role:HR Administrator');
     Route::post('/payroll', [PayrollController::class, 'store'])->middleware('role:HR Administrator');
     Route::get('/payroll/{id}', [PayrollController::class, 'show'])->whereNumber('id')->middleware('role:HR Administrator');
+    Route::get('/payroll-report', [PayrollController::class, 'report'])->middleware('role:HR Administrator');
+    Route::get('/assigned-allowances', [PayrollController::class, 'assignedAllowances'])->middleware('role:HR Administrator');
+    Route::get('/assigned-deductions', [PayrollController::class, 'assignedDeductions'])->middleware('role:HR Administrator');
 
     Route::get('/allowances', [AllowancesController::class, 'index'])->middleware('role:HR Administrator');
     Route::post('/allowances', [AllowancesController::class, 'store'])->middleware('role:HR Administrator');
@@ -72,6 +82,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/performance', [PerformanceEvaluationController::class, 'store'])->middleware('role:HR Administrator,Branch Manager,HR Officer');
 
     Route::get('/training', [TrainingController::class, 'index'])->middleware('role:HR Administrator,HR Officer,Branch Manager,Auditor');
+    Route::post('/training', [TrainingController::class, 'store'])->middleware('role:HR Administrator,HR Officer');
+    Route::delete('/training/{id}', [TrainingController::class, 'destroy'])->whereNumber('id')->middleware('role:HR Administrator,HR Officer');
     Route::post('/training/{employeeId}/enrol', [TrainingController::class, 'enrol'])->whereNumber('employeeId')->middleware('role:HR Administrator,HR Officer');
     Route::get('/training/outstanding', [TrainingController::class, 'outstanding'])->middleware('role:HR Administrator,HR Officer,Branch Manager');
 
@@ -110,8 +122,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // Get single application
     Route::get('/applications/{id}', [RecruitmentController::class, 'viewApplication'])
         ->whereNumber('id');
+    Route::get('/applicants/{applicantId}/documents/{field}/download-url', [RecruitmentController::class, 'documentUrl'])
+        ->whereNumber('applicantId');
 
     Route::get('/deployments', [DeploymentController::class, 'index'])->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor');
+    Route::get('/deployments/printable', [DeploymentController::class, 'printable'])->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor');
     Route::post('/deployments', [DeploymentController::class, 'store'])->middleware('role:HR Administrator,Branch Manager,HR Officer');
     Route::get('/branches/{branchId}/deployments/current', [DeploymentController::class, 'currentlyDeployed'])->whereNumber('branchId')->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor');
 
@@ -126,6 +141,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::patch('/notifications/{id}/read', [NotificationController::class, 'markRead'])->whereNumber('id');
+    Route::get('/audit-logs/export', [EntityController::class, 'exportAuditLogs'])->middleware('role:HR Administrator');
 
     Route::middleware('role:HR Administrator')->group(function () {
         foreach (array_keys(HrmsEntityRegistry::all()) as $entity) {

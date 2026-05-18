@@ -30,8 +30,6 @@ class Employee extends ErdModel
         'BranchID',
     ];
 
-    protected $hidden = ['CV', 'GoodConduct'];
-
     // ── Belongs To ──────────────────────────────────────────
 
     public function department()

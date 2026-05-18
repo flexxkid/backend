@@ -8,8 +8,8 @@ class AuditLog extends ErdModel
 {
     protected $primaryKey = 'AuditID';
     public $timestamps = false;
+    protected $appends = ['TableName', 'RecordID', 'Timestamp', 'user'];
 
-    // AuditLog is append-only — no updates or deletes allowed
     protected $fillable = [
         'UserID',
         'Username',
@@ -27,5 +27,42 @@ class AuditLog extends ErdModel
         'NewValues' => 'array',
     ];
 
-    // No relationships — records must survive user/record deletion
+    public function getTableNameAttribute(): ?string
+    {
+        return $this->getAttribute('AffectedTable');
+    }
+
+    public function getRecordIDAttribute(): ?int
+    {
+        return $this->getAttribute('AffectedRecordID');
+    }
+
+    public function getTimestampAttribute(): ?string
+    {
+        return $this->getAttribute('CreatedAt');
+    }
+
+    public function getUserNameAttribute(): ?string
+    {
+        return $this->attributes['Username'] ?? null;
+    }
+
+    public function userAccount()
+    {
+        return $this->belongsTo(UserAccount::class, 'UserID', 'UserID');
+    }
+
+    public function getUserAttribute(): array
+    {
+        $account = $this->relationLoaded('userAccount') ? $this->userAccount : $this->userAccount()->with('employee')->first();
+        $employee = $account?->employee;
+        $username = $this->attributes['Username'] ?? null;
+
+        return [
+            'UserID' => $this->getAttribute('UserID'),
+            'Username' => $username,
+            'FullName' => $employee?->FullName ?? $username,
+            'EmployeeID' => $employee?->EmployeeID,
+        ];
+    }
 }

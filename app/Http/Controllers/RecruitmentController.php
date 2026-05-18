@@ -166,7 +166,7 @@ class RecruitmentController extends Controller
     public function viewApplications(Request $request, int $recruitmentId): JsonResponse
     {
         $applications = Applicant::where('RecruitmentID', $recruitmentId)
-            ->orderByDesc('created_at')
+            ->orderByDesc('ApplicationID')
             ->paginate($request->integer('per_page', 15));
 
         $applications->getCollection()->transform(
@@ -189,6 +189,21 @@ class RecruitmentController extends Controller
         return response()->json(
             $this->appendApplicantDocumentUrls($application)
         );
+    }
+
+    public function documentUrl(int $applicantId, string $field): JsonResponse
+    {
+        abort_unless(
+            in_array($field, ['LetterOfApplication', 'HighestLevelCertificate', 'CV', 'GoodConduct'], true),
+            404
+        );
+
+        $applicant = Applicant::findOrFail($applicantId);
+        $url = $this->applicantDocumentUrl($applicant, $field);
+
+        abort_unless($url, 404, 'Document file not found');
+
+        return response()->json(['url' => $url]);
     }
 
     public function showApplicantDocument(Request $request, int $applicantId, string $field): BinaryFileResponse
@@ -223,12 +238,26 @@ class RecruitmentController extends Controller
      */
     public function updateApplicantStatus(Request $request, int $applicantId): JsonResponse
     {
+        $applicant = Applicant::findOrFail($applicantId);
         $validated = $request->validate([
-            'ApplicationStatus' => 'required|string|in:Submitted,Approved,Rejected,Shortlisted,Hired',
+            'FullName' => 'nullable|string|max:200',
+            'FirstName' => 'required_without:FullName|string|max:100',
+            'LastName' => 'required_without:FullName|string|max:100',
+            'DateOfBirth' => 'nullable|date',
+            'Email' => 'nullable|email|max:150',
+            'Address' => 'nullable|string|max:255',
+            'PhoneNumber' => 'nullable|string|max:20',
+            'Gender' => 'nullable|string|max:20',
+            'LetterOfApplication' => 'nullable|string|max:500',
+            'HighestLevelCertificate' => 'nullable|string|max:255',
+            'CV' => 'nullable|string|max:500',
+            'ApplicationStatus' => 'nullable|string|in:Submitted,Approved,Rejected,Shortlisted,Hired,Pending',
+            'GoodConduct' => 'nullable|string|max:500',
+            'NationalID' => 'required|string|max:50|unique:Applicant,NationalID,'.$applicantId.',ApplicationID',
+            'RecruitmentID' => 'nullable|exists:Recruitment,RecruitmentID',
         ]);
 
-        $applicant = Applicant::findOrFail($applicantId);
-        $applicant->update($validated);
+        $applicant->update(PersonName::normalizePayload($validated, false));
 
         return response()->json(
             $this->appendApplicantDocumentUrls(

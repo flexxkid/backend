@@ -46,6 +46,21 @@ class DocumentStorageService
         }
     }
 
+    public function isLocalDisk(): bool
+    {
+        return $this->disk() === 'local';
+    }
+
+    public function exists(string $path): bool
+    {
+        return Storage::disk($this->disk())->exists($path);
+    }
+
+    public function absolutePath(string $path): string
+    {
+        return Storage::disk($this->disk())->path($path);
+    }
+
     public function isB2Configured(): bool
     {
         return filled(config('filesystems.disks.b2.key'))

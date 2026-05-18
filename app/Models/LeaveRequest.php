@@ -19,6 +19,7 @@ class LeaveRequest extends ErdModel
         'LeaveStatus',
         'ApprovedBy',
         'ApprovedAt',
+        'ApprovalComment',
     ];
 
     protected $casts = [

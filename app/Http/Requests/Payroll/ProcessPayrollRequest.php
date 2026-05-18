@@ -18,6 +18,12 @@ class ProcessPayrollRequest extends FormRequest
             'PayPeriod' => ['required', 'string', 'max:100'],
             'BasicSalary' => ['required', 'numeric', 'min:0'],
             'PaymentDate' => ['nullable', 'date'],
+            'allowances' => ['nullable', 'array'],
+            'allowances.*.id' => ['required_with:allowances', 'integer', 'exists:Allowances,AllowanceID'],
+            'allowances.*.amount' => ['nullable', 'numeric', 'min:0'],
+            'deductions' => ['nullable', 'array'],
+            'deductions.*.id' => ['required_with:deductions', 'integer', 'exists:Deductions,DeductionID'],
+            'deductions.*.amount' => ['nullable', 'numeric', 'min:0'],
         ];
     }
 }

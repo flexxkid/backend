@@ -5,14 +5,21 @@ namespace App\Http\Controllers;
 use App\Http\Requests\Employee\StoreEmployeeRequest;
 use App\Http\Requests\Employee\UpdateEmployeeRequest;
 use App\Models\Employee;
+use App\Services\DocumentStorageService;
 use App\Support\PersonName;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmployeeController extends Controller
 {
+    public function __construct(private readonly DocumentStorageService $documentStorageService)
+    {
+    }
+
     public function index(Request $request): JsonResponse|StreamedResponse|Response
     {
         $query = Employee::query()
@@ -89,12 +96,19 @@ class EmployeeController extends Controller
             'performanceEvaluations.evaluator',
         ])->findOrFail($id);
 
-        if (request()->user()?->role?->RoleName === 'Branch Manager'
+        $roleName = request()->user()?->role?->RoleName;
+
+        if ($roleName === 'Branch Manager'
             && $employee->BranchID !== request()->user()?->employee?->BranchID) {
             abort(403, 'Forbidden: insufficient role');
         }
 
-        return response()->json($employee);
+        if ($roleName === 'Employee'
+            && (int) $employee->EmployeeID !== (int) request()->user()?->EmployeeID) {
+            abort(403, 'Forbidden: insufficient role');
+        }
+
+        return response()->json($this->appendApplicationDocumentUrls($employee));
     }
 
     public function update(UpdateEmployeeRequest $request, int $id): JsonResponse
@@ -111,6 +125,34 @@ class EmployeeController extends Controller
         $employee->update(['EmploymentStatus' => 'Inactive']);
 
         return response()->json(['message' => 'Employee deactivated']);
+    }
+
+    public function applicationDocumentUrl(Request $request, int $employeeId, string $field): JsonResponse
+    {
+        abort_unless(
+            in_array($field, ['LetterOfApplication', 'HighestLevelCertificate', 'CV', 'GoodConduct'], true),
+            404
+        );
+
+        $employee = Employee::findOrFail($employeeId);
+
+        $roleName = $request->user()?->role?->RoleName;
+
+        if ($roleName === 'Branch Manager'
+            && $employee->BranchID !== $request->user()?->employee?->BranchID) {
+            abort(403, 'Forbidden: insufficient role');
+        }
+
+        if ($roleName === 'Employee'
+            && (int) $employee->EmployeeID !== (int) $request->user()?->EmployeeID) {
+            abort(403, 'Forbidden: insufficient role');
+        }
+
+        $url = $this->employeeApplicationDocumentUrl($employee, $field);
+
+        abort_unless($url, 404, 'Document file not found');
+
+        return response()->json(['url' => $url]);
     }
 
     private function buildEmployeePdf($employees): string
@@ -179,5 +221,66 @@ class EmployeeController extends Controller
         $pdf .= "startxref\n{$xrefOffset}\n%%EOF";
 
         return $pdf;
+    }
+
+    public function streamApplicationDocument(int $employeeId, string $field): Response
+    {
+        abort_unless(
+            in_array($field, ['LetterOfApplication', 'HighestLevelCertificate', 'CV', 'GoodConduct'], true),
+            404
+        );
+
+        $employee = Employee::findOrFail($employeeId);
+        $path = $employee->{$field};
+
+        abort_unless(filled($path), 404);
+        abort_unless($this->documentStorageService->isLocalDisk(), 404);
+
+        $disk = Storage::disk($this->documentStorageService->disk());
+        $absolutePath = $disk->path($path);
+
+        abort_unless(is_file($absolutePath), 404);
+
+        return response()->file(
+            $absolutePath,
+            ['Content-Disposition' => 'inline; filename="' . basename($path) . '"']
+        );
+    }
+
+    private function appendApplicationDocumentUrls(Employee $employee): Employee
+    {
+        foreach (['LetterOfApplication', 'HighestLevelCertificate', 'CV', 'GoodConduct'] as $field) {
+            $employee->setAttribute($field . 'Url', $this->employeeApplicationDocumentUrl($employee, $field));
+        }
+
+        return $employee;
+    }
+
+    private function employeeApplicationDocumentUrl(Employee $employee, string $field): ?string
+    {
+        $path = $employee->{$field};
+
+        if (! filled($path)) {
+            return null;
+        }
+
+        $disk = Storage::disk($this->documentStorageService->disk());
+
+        if (! $disk->exists($path)) {
+            return null;
+        }
+
+        if (! $this->documentStorageService->isLocalDisk()) {
+            return $this->documentStorageService->url($path);
+        }
+
+        return URL::temporarySignedRoute(
+            'employees.application-documents.show',
+            now()->addMinutes(5),
+            [
+                'employeeId' => $employee->EmployeeID,
+                'field' => $field,
+            ]
+        );
     }
 }
