@@ -96,15 +96,17 @@ class UserAccountController extends Controller
     {
         $account = UserAccount::findOrFail($id);
         $account->update(['AccountStatus' => 'inactive']);
+        $account->tokens()->delete();
 
-        return response()->json(['message' => 'Account deactivated']);
+        return response()->json($account->fresh()->load(['role.permissions', 'employee']));
     }
 
     public function destroy(int $id): JsonResponse
     {
         $account = UserAccount::findOrFail($id);
         $account->update(['AccountStatus' => 'inactive']);
+        $account->tokens()->delete();
 
-        return response()->json(['message' => 'Account deactivated']);
+        return response()->json($account->fresh()->load(['role.permissions', 'employee']));
     }
 }

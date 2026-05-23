@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Employee;
 use App\Models\Training;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -33,21 +34,30 @@ class TrainingController extends Controller
 
     public function enrol(Request $request, int $employeeId): JsonResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'TrainingID' => 'required|exists:Training,TrainingID',
             'CompletionStatus' => 'required|in:Enrolled,Completed,Failed',
         ]);
 
         $employee = Employee::findOrFail($employeeId);
-        $existing = $employee->trainings()->where('Training.TrainingID', $request->integer('TrainingID'))->exists();
+        $training = Training::findOrFail((int) $validated['TrainingID']);
+
+        if ($this->trainingHasEnded($training)) {
+            return response()->json([
+                'message' => 'This training is already over and cannot accept new applications.',
+            ], 422);
+        }
+
+        $existing = $employee->trainings()->where('Training.TrainingID', $training->TrainingID)->exists();
+        $completionStatus = $request->string('CompletionStatus')->toString();
 
         if ($existing) {
-            $employee->trainings()->updateExistingPivot($request->integer('TrainingID'), [
-                'CompletionStatus' => $request->string('CompletionStatus')->toString(),
+            $employee->trainings()->updateExistingPivot($training->TrainingID, [
+                'CompletionStatus' => $completionStatus,
             ]);
         } else {
-            $employee->trainings()->attach($request->integer('TrainingID'), [
-                'CompletionStatus' => $request->string('CompletionStatus')->toString(),
+            $employee->trainings()->attach($training->TrainingID, [
+                'CompletionStatus' => $completionStatus,
             ]);
         }
 
@@ -68,5 +78,24 @@ class TrainingController extends Controller
         $employees = Employee::with(['trainings' => fn ($query) => $query->wherePivot('CompletionStatus', '!=', 'Completed')])->get();
 
         return response()->json($employees);
+    }
+
+    private function trainingHasEnded(Training $training): bool
+    {
+        $todayInEastAfrica = CarbonImmutable::now('Africa/Nairobi')->startOfDay();
+
+        if ($training->EndDate) {
+            return CarbonImmutable::parse($training->EndDate, 'Africa/Nairobi')
+                ->startOfDay()
+                ->lt($todayInEastAfrica);
+        }
+
+        if ($training->StartDate) {
+            return CarbonImmutable::parse($training->StartDate, 'Africa/Nairobi')
+                ->startOfDay()
+                ->lt($todayInEastAfrica);
+        }
+
+        return false;
     }
 }

@@ -18,6 +18,12 @@ class RoleMiddleware
             return new JsonResponse(['message' => 'Unauthorised'], 403);
         }
 
+        if ($user->fresh()?->AccountStatus !== 'active') {
+            $user->currentAccessToken()?->delete();
+
+            return new JsonResponse(['message' => 'Account is inactive.'], 401);
+        }
+
         if (! in_array($roleName, $roles, true)) {
             return new JsonResponse(['message' => 'Forbidden: insufficient role'], 403);
         }

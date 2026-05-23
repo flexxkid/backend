@@ -30,7 +30,7 @@ Route::prefix('auth')->group(function () {
 Route::get('/recruitment', [RecruitmentController::class, 'index']);
 Route::post('/recruitment/{recruitmentId}/apply', [RecruitmentController::class, 'apply'])->whereNumber('recruitmentId');
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'active.account'])->group(function () {
     Route::get('/user', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::match(['put', 'patch'], '/profile', [AuthController::class, 'updateProfile']);
@@ -145,7 +145,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('role:HR Administrator')->group(function () {
         foreach (array_keys(HrmsEntityRegistry::all()) as $entity) {
-            if (in_array($entity, ['allowances', 'deductions', 'employees', 'user-accounts'], true)) {
+            if (in_array($entity, ['allowances', 'attendance', 'deductions', 'employees', 'user-accounts'], true)) {
                 continue;
             }
 

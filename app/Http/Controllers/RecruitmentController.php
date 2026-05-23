@@ -240,21 +240,21 @@ class RecruitmentController extends Controller
     {
         $applicant = Applicant::findOrFail($applicantId);
         $validated = $request->validate([
-            'FullName' => 'nullable|string|max:200',
-            'FirstName' => 'required_without:FullName|string|max:100',
-            'LastName' => 'required_without:FullName|string|max:100',
-            'DateOfBirth' => 'nullable|date',
-            'Email' => 'nullable|email|max:150',
-            'Address' => 'nullable|string|max:255',
-            'PhoneNumber' => 'nullable|string|max:20',
-            'Gender' => 'nullable|string|max:20',
-            'LetterOfApplication' => 'nullable|string|max:500',
-            'HighestLevelCertificate' => 'nullable|string|max:255',
-            'CV' => 'nullable|string|max:500',
-            'ApplicationStatus' => 'nullable|string|in:Submitted,Approved,Rejected,Shortlisted,Hired,Pending',
-            'GoodConduct' => 'nullable|string|max:500',
-            'NationalID' => 'required|string|max:50|unique:Applicant,NationalID,'.$applicantId.',ApplicationID',
-            'RecruitmentID' => 'nullable|exists:Recruitment,RecruitmentID',
+            'FullName' => 'sometimes|nullable|string|max:200',
+            'FirstName' => 'sometimes|required_without:FullName|string|max:100',
+            'LastName' => 'sometimes|required_without:FullName|string|max:100',
+            'DateOfBirth' => 'sometimes|nullable|date',
+            'Email' => 'sometimes|nullable|email|max:150',
+            'Address' => 'sometimes|nullable|string|max:255',
+            'PhoneNumber' => 'sometimes|nullable|string|max:20',
+            'Gender' => 'sometimes|nullable|string|max:20',
+            'LetterOfApplication' => 'sometimes|nullable|string|max:500',
+            'HighestLevelCertificate' => 'sometimes|nullable|string|max:255',
+            'CV' => 'sometimes|nullable|string|max:500',
+            'ApplicationStatus' => 'sometimes|nullable|string|in:Submitted,Approved,Rejected,Shortlisted,Hired,Pending',
+            'GoodConduct' => 'sometimes|nullable|string|max:500',
+            'NationalID' => 'sometimes|nullable|string|max:50|unique:Applicant,NationalID,'.$applicantId.',ApplicationID',
+            'RecruitmentID' => 'sometimes|nullable|exists:Recruitment,RecruitmentID',
         ]);
 
         $applicant->update(PersonName::normalizePayload($validated, false));

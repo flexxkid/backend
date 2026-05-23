@@ -474,6 +474,54 @@ class HrmsApiTest extends TestCase
             ->assertJsonPath('NetSalary', 53000);
     }
 
+    public function test_allowance_creation_persists_default_amount(): void
+    {
+        $context = $this->seedContext();
+        Sanctum::actingAs($context['user']);
+
+        $this->postJson('/api/allowances', [
+            'AllowanceName' => 'Night Shift',
+            'DefaultAmount' => 4200,
+        ])->assertCreated()
+            ->assertJsonPath('DefaultAmount', 4200);
+    }
+
+    public function test_applicant_status_can_be_updated_without_resubmitting_profile_fields(): void
+    {
+        $context = $this->seedContext();
+        Sanctum::actingAs($context['user']);
+
+        $applicant = $this->postJson("/api/recruitment/{$context['recruitment']->RecruitmentID}/apply", [
+            'FullName' => 'Status Only',
+            'Email' => 'status.only@example.com',
+            'NationalID' => 'APP-STATUS-001',
+        ])->assertCreated()->json();
+
+        $this->patchJson("/api/applicants/{$applicant['ApplicationID']}", [
+            'ApplicationStatus' => 'Rejected',
+        ])->assertOk()
+            ->assertJsonPath('ApplicationStatus', 'Rejected');
+    }
+
+    public function test_training_enrolment_rejects_past_training(): void
+    {
+        $context = $this->seedContext();
+        Sanctum::actingAs($context['user']);
+
+        $training = Training::create([
+            'TrainingName' => 'Expired Drill',
+            'TrainingType' => 'Mandatory',
+            'StartDate' => '2026-05-20',
+            'EndDate' => '2026-05-21',
+        ]);
+
+        $this->postJson("/api/training/{$context['employee']->EmployeeID}/enrol", [
+            'TrainingID' => $training->TrainingID,
+            'CompletionStatus' => 'Enrolled',
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'This training is already over and cannot accept new applications.');
+    }
+
     public function test_applicant_can_be_converted_to_employee(): void
     {
         $context = $this->seedContext();
@@ -554,6 +602,7 @@ class HrmsApiTest extends TestCase
 
         $allowance = Allowances::create([
             'AllowanceName' => 'Housing',
+            'DefaultAmount' => 15000,
         ]);
 
         $deduction = Deductions::create([
@@ -675,6 +724,7 @@ class HrmsApiTest extends TestCase
             ],
             'allowances' => [
                 'AllowanceName' => 'Transport',
+                'DefaultAmount' => 8000,
             ],
             'deductions' => [
                 'DeductionName' => 'NSSF',
@@ -837,7 +887,7 @@ class HrmsApiTest extends TestCase
             'role-permissions' => $storePayload,
             'branches' => ['BranchName' => 'Kisumu West', 'BranchLocation' => 'Kisumu CBD'],
             'document-types' => ['TypeName' => 'Certificate', 'TypeDescription' => 'Updated'],
-            'allowances' => ['AllowanceName' => 'Medical'],
+            'allowances' => ['AllowanceName' => 'Medical', 'DefaultAmount' => 9500],
             'deductions' => ['DeductionName' => 'Insurance', 'Rate' => 0.04],
             'trainings' => ['TrainingName' => 'Advanced First Aid', 'TrainingType' => 'Updated', 'StartDate' => '2026-05-01', 'EndDate' => '2026-05-04'],
             'departments' => ['DepartmentName' => 'Corporate Finance', 'HODID' => $context['supervisor']->EmployeeID, 'BranchID' => $context['branch']->BranchID],

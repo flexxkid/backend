@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\Employee\StoreEmployeeRequest;
 use App\Http\Requests\Employee\UpdateEmployeeRequest;
 use App\Models\Employee;
+use App\Models\UserAccount;
 use App\Services\DocumentStorageService;
 use App\Support\PersonName;
 use Illuminate\Http\JsonResponse;
@@ -123,6 +124,12 @@ class EmployeeController extends Controller
     {
         $employee = Employee::findOrFail($id);
         $employee->update(['EmploymentStatus' => 'Inactive']);
+        UserAccount::query()
+            ->where('EmployeeID', $employee->EmployeeID)
+            ->each(function (UserAccount $account): void {
+                $account->update(['AccountStatus' => 'inactive']);
+                $account->tokens()->delete();
+            });
 
         return response()->json(['message' => 'Employee deactivated']);
     }

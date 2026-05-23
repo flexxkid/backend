@@ -11,6 +11,11 @@ class Allowances extends ErdModel
 
     protected $fillable = [
         'AllowanceName',
+        'DefaultAmount',
+    ];
+
+    protected $casts = [
+        'DefaultAmount' => 'float',
     ];
 
     public function assignedAllowances()

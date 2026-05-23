@@ -97,13 +97,15 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json($request->user()?->load(['employee', 'role', 'notifications']));
+        $user = $this->ensureActiveUser($request);
+
+        return response()->json($user->load(['employee', 'role', 'notifications']));
     }
 
     public function logout(Request $request): JsonResponse
     {
         /** @var UserAccount $user */
-        $user = $request->user();
+        $user = $this->ensureActiveUser($request);
         $user?->currentAccessToken()?->delete();
 
         if ($user) {
@@ -126,7 +128,7 @@ class AuthController extends Controller
     public function updateProfile(Request $request): JsonResponse
     {
         /** @var UserAccount $user */
-        $user = $request->user();
+        $user = $this->ensureActiveUser($request);
         abort_if(! $user?->employee, 422, 'This account is not linked to an employee profile.');
 
         $validated = $request->validate([
@@ -168,7 +170,7 @@ class AuthController extends Controller
     public function changePassword(Request $request): JsonResponse
     {
         /** @var UserAccount $user */
-        $user = $request->user();
+        $user = $this->ensureActiveUser($request);
 
         $validated = $request->validate([
             'current_password' => ['required', 'string'],
@@ -192,5 +194,20 @@ class AuthController extends Controller
         );
 
         return response()->json(['message' => 'Password updated successfully.']);
+    }
+
+    private function ensureActiveUser(Request $request): UserAccount
+    {
+        /** @var UserAccount|null $user */
+        $user = $request->user();
+
+        abort_if(! $user, 401, 'Unauthenticated.');
+
+        if ($user->fresh()?->AccountStatus !== 'active') {
+            $user->currentAccessToken()?->delete();
+            abort(401, 'Account is inactive.');
+        }
+
+        return $user;
     }
 }

@@ -12,10 +12,51 @@ class AttendanceController extends Controller
     {
         $query = Attendance::with('employee')
             ->when($request->filled('EmployeeID'), fn ($query) => $query->where('EmployeeID', $request->integer('EmployeeID')))
-            ->when($request->filled('from'), fn ($query) => $query->whereDate('AttendanceDate', '>=', $request->date('from')))
-            ->when($request->filled('to'), fn ($query) => $query->whereDate('AttendanceDate', '<=', $request->date('to')));
+            ->when($request->filled('from'), fn ($query) => $query->whereDate('AttendanceDate', '>=', $request->input('from')))
+            ->when($request->filled('to'), fn ($query) => $query->whereDate('AttendanceDate', '<=', $request->input('to')));
 
-        return response()->json($query->paginate($request->integer('per_page', 15)));
+        $sortBy = $request->input('sort_by');
+        $sortDirection = strtolower((string) $request->input('sort_direction', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        if ($sortBy === 'AttendanceDate') {
+            $query->orderBy('AttendanceDate', $sortDirection)
+                ->orderBy('AttendanceID', $sortDirection);
+        } else {
+            $query->orderByDesc('AttendanceDate')
+                ->orderByDesc('AttendanceID');
+        }
+
+        $paginator = $query->paginate($request->integer('per_page', 15));
+        $directionFactor = $sortDirection === 'asc' ? 1 : -1;
+
+        $sorted = $paginator->getCollection()
+            ->sort(function ($left, $right) use ($sortBy, $directionFactor) {
+                $leftDate = (string) ($left->AttendanceDate ?? '');
+                $rightDate = (string) ($right->AttendanceDate ?? '');
+
+                if ($sortBy === 'AttendanceDate') {
+                    $dateComparison = strcmp($leftDate, $rightDate) * $directionFactor;
+
+                    if ($dateComparison !== 0) {
+                        return $dateComparison;
+                    }
+
+                    return ((int) ($left->AttendanceID ?? 0) <=> (int) ($right->AttendanceID ?? 0)) * $directionFactor;
+                }
+
+                $dateComparison = strcmp($rightDate, $leftDate);
+
+                if ($dateComparison !== 0) {
+                    return $dateComparison;
+                }
+
+                return (int) ($right->AttendanceID ?? 0) <=> (int) ($left->AttendanceID ?? 0);
+            })
+            ->values();
+
+        $paginator->setCollection($sorted);
+
+        return response()->json($paginator);
     }
 
     public function store(Request $request): JsonResponse

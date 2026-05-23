@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Branch;
 use App\Models\Department;
+use App\Models\DeploymentHistory;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
+use App\Models\PerformanceEvaluation;
 use App\Models\Role;
 use App\Models\UserAccount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -36,6 +38,15 @@ class HrmsComplianceTest extends TestCase
     {
         $context = $this->seedEmployeeAccessContext();
 
+        $linkedAccount = UserAccount::create([
+            'EmployeeID' => $context['branchEmployee']->EmployeeID,
+            'Username' => 'john.kamau',
+            'PasswordHash' => Hash::make('secret123'),
+            'RoleID' => $context['managerAccount']->RoleID,
+            'AccountStatus' => 'active',
+        ]);
+        $linkedAccount->createToken('employee-session');
+
         Sanctum::actingAs($context['adminAccount']);
 
         $this->deleteJson("/api/employees/{$context['branchEmployee']->EmployeeID}")
@@ -46,6 +57,43 @@ class HrmsComplianceTest extends TestCase
             'EmployeeID' => $context['branchEmployee']->EmployeeID,
             'EmploymentStatus' => 'Inactive',
         ]);
+        $this->assertDatabaseHas('UserAccount', [
+            'UserID' => $linkedAccount->UserID,
+            'AccountStatus' => 'inactive',
+        ]);
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_employee_show_includes_deployment_and_performance_history_payloads(): void
+    {
+        $context = $this->seedEmployeeAccessContext();
+
+        DeploymentHistory::create([
+            'EmployeeID' => $context['branchEmployee']->EmployeeID,
+            'BranchID' => $context['mainBranch']->BranchID,
+            'DeploymentSite' => 'HQ Gate',
+            'StartDate' => '2026-05-01',
+            'EndDate' => '2026-05-31',
+            'Reason' => 'Monthly rotation',
+            'DeployedBy' => $context['branchManagerEmployee']->EmployeeID,
+        ]);
+
+        PerformanceEvaluation::create([
+            'EmployeeID' => $context['branchEmployee']->EmployeeID,
+            'EvaluatorID' => $context['adminEmployee']->EmployeeID,
+            'EvaluationPeriod' => 'Q2-2026',
+            'Score' => 91,
+            'Comments' => 'Reliable coverage at assigned post.',
+        ]);
+
+        Sanctum::actingAs($context['adminAccount']);
+
+        $this->getJson("/api/employees/{$context['branchEmployee']->EmployeeID}")
+            ->assertOk()
+            ->assertJsonPath('deployment_histories.0.DeploymentSite', 'HQ Gate')
+            ->assertJsonPath('deployment_histories.0.branch.BranchName', 'Nairobi HQ')
+            ->assertJsonPath('performance_evaluations.0.EvaluationPeriod', 'Q2-2026')
+            ->assertJsonPath('performance_evaluations.0.evaluator.FullName', 'Admin User');
     }
 
     public function test_employee_search_is_case_insensitive_and_supports_csv_and_pdf_exports(): void

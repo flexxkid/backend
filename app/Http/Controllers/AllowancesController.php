@@ -26,7 +26,10 @@ class AllowancesController extends Controller
     {
         $validated = $request->validate([
             'AllowanceName' => ['required', 'string', 'max:150', Rule::unique('Allowances', 'AllowanceName')],
+            'DefaultAmount' => ['nullable', 'numeric', 'min:0'],
         ]);
+
+        $validated['DefaultAmount'] = (float) ($validated['DefaultAmount'] ?? 0);
 
         $allowance = Allowances::create($validated);
 
@@ -51,7 +54,10 @@ class AllowancesController extends Controller
                 'max:150',
                 Rule::unique('Allowances', 'AllowanceName')->ignore($allowance->AllowanceID, 'AllowanceID'),
             ],
+            'DefaultAmount' => ['nullable', 'numeric', 'min:0'],
         ]);
+
+        $validated['DefaultAmount'] = (float) ($validated['DefaultAmount'] ?? $allowance->DefaultAmount ?? 0);
 
         $allowance->update($validated);
 
