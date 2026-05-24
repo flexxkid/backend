@@ -19,6 +19,9 @@ use App\Http\Controllers\UserAccountController;
 use App\Support\HrmsEntityRegistry;
 use Illuminate\Support\Facades\Route;
 
+use App\Mail\PayrollProcessorMail;
+use Illuminate\Support\Facades\Mail;
+
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
@@ -35,6 +38,25 @@ Route::middleware(['auth:sanctum', 'active.account'])->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::match(['put', 'patch'], '/profile', [AuthController::class, 'updateProfile']);
     Route::post('/profile/password', [AuthController::class, 'changePassword']);
+
+
+
+Route::post('/send-payroll-email', function () {
+    $validated = request()->validate([
+        'email' => 'required|email',
+        'employeeName' => 'required|string',
+        'payPeriod' => 'required|string',
+        'netPay' => 'required|numeric',
+    ]);
+
+    Mail::to($validated['email'])->send(new PayrollProcessorMail(
+        $validated['employeeName'],
+        $validated['payPeriod'],
+        $validated['netPay']
+    ));
+
+    return response()->json(['message' => 'Email sent successfully!']);
+});
 
     Route::get('/employees', [EmployeeController::class, 'index'])->middleware('role:HR Administrator,Branch Manager,HR Officer,Auditor');
     Route::post('/employees', [EmployeeController::class, 'store'])->middleware('role:HR Administrator,HR Officer');
